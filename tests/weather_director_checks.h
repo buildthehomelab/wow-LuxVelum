@@ -435,6 +435,24 @@ void CheckLightning()
     const WeatherLook struck = asked.Step(clearSky, tuning, kStart + 2 * kFrame);
     Check(struck.flash > 0.5f && struck.strikeAsked, "a strike asked for fires at once, even under a clear sky");
 
+    WeatherDirector stormy;
+    bool naturalStrikeTooSoon = false;
+    for (int press = 0; press < 40; ++press)
+    {
+        double now = kStart + 1000.0 * press;
+        for (int frame = 0; frame < 30 * (20 + press); ++frame, now += kFrame)
+            stormy.Step(thunderOnly, tuning, now);
+        WeatherReading pressed = thunderOnly;
+        pressed.strikeRequested = true;
+        const float pressedSeed = stormy.Step(pressed, tuning, now).strikeSeed;
+        for (int frame = 1; frame < 30 * 8 - 1; ++frame)
+        {
+            const WeatherLook later = stormy.Step(thunderOnly, tuning, now + frame * kFrame);
+            naturalStrikeTooSoon = naturalStrikeTooSoon || later.strikeSeed != pressedSeed;
+        }
+    }
+    Check(!naturalStrikeTooSoon, "a storm's own strikes wait 8 seconds after a strike asked for");
+
     tuning.lightning = 0.0f;
     WeatherDirector askedWhenOff;
     askedWhenOff.Step(button, tuning, kStart);

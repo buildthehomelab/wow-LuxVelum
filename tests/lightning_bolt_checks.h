@@ -39,6 +39,7 @@ void CheckGeometry()
     Check(descends, "the channel only goes down");
     Check(ahead, "the channel stays near the azimuth it was given");
     Check(channel.front().brightness == 0.0f && channel[32].brightness == 1.0f, "it emerges from the clouds");
+    Check(channel.back().brightness == 0.0f, "its foot fades out, so it doesn't end square when seen from high up");
 
     bool branchesJoin = true;
     bool branchesFade = true;

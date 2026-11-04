@@ -435,6 +435,7 @@ void StepWeatherLook(const Config& cfg)
     {
         g_weatherReading = {};
         g_weatherLook = {};
+        g_strikeRequested = false;
         return;
     }
     WeatherReading reading = ReadClientWeather();

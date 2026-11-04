@@ -334,7 +334,7 @@ bool DrawWeather(Config& c)
                       "uncomfortable for people sensitive to flashing light. 0 = none");
     changed |= Slider("Lightning bolts", c.weatherBolts, 0.0f, 1.5f, "%.2f",
                       "How bright the bolts are that fork down from the clouds behind the land. 0 = flashes only");
-    if (ImGui::Button("Strike now"))
+    if (c.weatherEffects && c.weatherLightning > 0.0f && ImGui::Button("Strike now"))
         engine::RequestLightningStrike();
     changed |= Slider("Dawn mist", c.weatherDawnMist, 0.0f, 2.0f, "%.2f",
                       "Extra mist around sunrise in clear weather. 0 = none");

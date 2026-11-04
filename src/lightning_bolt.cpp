@@ -9,7 +9,8 @@ constexpr float kPi = 3.14159265358979323846f;
 constexpr float kDegrees = kPi / 180.0f;
 constexpr float kLowestTopDegrees = 16.0f;
 constexpr float kHighestTopDegrees = 32.0f;
-constexpr float kBottomDegrees = -1.5f;
+constexpr float kBottomDegrees = -4.0f;
+constexpr float kFootFadesWithin = 0.12f;
 constexpr float kFootDriftDegrees = 6.0f;
 constexpr float kChannelJagPerDrop = 0.17f;
 constexpr int kChannelDoublings = 6;
@@ -98,7 +99,7 @@ float Interpolated(float from, float to, float share)
 }
 
 BoltStrand StrandAlong(const std::vector<SkySpot>& line, float widthFrom, float widthTo, float brightnessFrom,
-                       float brightnessTo, float emergesWithin)
+                       float brightnessTo, float emergesWithin, float fadesWithin)
 {
     BoltStrand strand;
     strand.points.reserve(line.size());
@@ -112,6 +113,8 @@ BoltStrand StrandAlong(const std::vector<SkySpot>& line, float widthFrom, float 
         point.brightness = Interpolated(brightnessFrom, brightnessTo, share);
         if (emergesWithin > 0.0f)
             point.brightness *= std::min(share / emergesWithin, 1.0f);
+        if (fadesWithin > 0.0f)
+            point.brightness *= std::min((1.0f - share) / fadesWithin, 1.0f);
         strand.points.push_back(point);
     }
     return strand;
@@ -207,7 +210,7 @@ LightningBolt BuildLightningBolt(float seed, float azimuthRadians, bool mustBeVi
         return bolt;
 
     const std::vector<SkySpot> channel = JaggedLine(top, foot, kChannelDoublings, kChannelJagPerDrop, random);
-    bolt.strands.push_back(StrandAlong(channel, 1.0f, kFootWidth, 1.0f, 1.0f, kEmergesWithin));
+    bolt.strands.push_back(StrandAlong(channel, 1.0f, kFootWidth, 1.0f, 1.0f, kEmergesWithin, kFootFadesWithin));
     const int branches = kFewestBranches + static_cast<int>(random.Unit() * (kMostBranches - kFewestBranches + 1));
     for (int branch = 0; branch < branches; ++branch)
     {
@@ -220,7 +223,7 @@ LightningBolt BuildLightningBolt(float seed, float azimuthRadians, bool mustBeVi
                                                  random.Between(0.5f, 1.5f),
                              start.elevation - drop};
         const std::vector<SkySpot> line = JaggedLine(start, tip, kBranchDoublings, kBranchJagPerDrop, random);
-        bolt.strands.push_back(StrandAlong(line, kBranchWidth, kBranchTipWidth, kBranchBrightness, 0.0f, 0.0f));
+        bolt.strands.push_back(StrandAlong(line, kBranchWidth, kBranchTipWidth, kBranchBrightness, 0.0f, 0.0f, 0.0f));
     }
     return bolt;
 }

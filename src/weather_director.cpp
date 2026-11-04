@@ -167,7 +167,11 @@ void WeatherDirector::Strike(double nowSeconds, bool asked)
 float WeatherDirector::Flash(const WeatherReading& reading, const WeatherTuning& tuning, double nowSeconds)
 {
     if (reading.strikeRequested && tuning.lightning > 0.0f)
+    {
         Strike(nowSeconds, true);
+        if (m_nextStrike != 0.0)
+            m_nextStrike = std::max(m_nextStrike, nowSeconds + kShortestStrikeGapSeconds);
+    }
     const bool storm = LightningWeather(reading, nowSeconds) && tuning.lightning > 0.0f;
     if (!storm)
     {

@@ -296,13 +296,14 @@ cloud density (`0x7F056A`) if they ever take that over per zone. None of the loo
 the overcast reading, the cover, the colours' order and the field.
 
 **Lightning bolts.** Three strikes in four draw a bolt; the rest only light up the clouds. A strike's seed picks the
-shape: a channel jagged by midpoint displacement, from 16 to 32 degrees up to just below the horizon, with two to six
-branches that fade to their tips. Most land within 45 degrees of where the camera looks when they strike, and the bolt then
-stays at that place in the sky. It is drawn right after the clouds, in the same pass and added to them, as ribbons a fixed
-number of pixels wide, so the land, trees and buildings drawn later cover its foot, and the bolt lights the clouds around
-its top. Its brightness follows the strike's flash, two strokes included, so `WeatherLightning` at 0 also stops bolts. None
-of this is seen in game yet. **Strike now** in the settings window fires one at once, ahead of the camera, whatever the
-weather, with clouds on screen; bolts need the cloud pass, so a sky with no clouds has flashes only.
+shape: a channel jagged by midpoint displacement, from 16 to 32 degrees up to below the horizon, fading out at its foot,
+with two to six branches that fade to their tips. Most land within 45 degrees of where the camera looks when they
+strike, and the bolt then stays at that place in the sky. It is drawn right after the clouds, in the same pass and added
+to them, as ribbons a fixed number of pixels wide, so the land, trees and buildings drawn later cover it where they rise
+above that part of the sky, and the bolt lights the clouds around its top. Its brightness follows the strike's flash,
+two strokes included, so `WeatherLightning` at 0 also stops bolts. None of this is seen in game yet. **Strike now** in
+the settings window fires one at once, ahead of the camera, whatever the weather. It needs `WeatherEffects` on and
+`WeatherLightning` above 0, and bolts need the cloud pass, so a sky with no clouds has flashes only.
 
 Rain rings are ordinary ripple disturbances at random points around the camera, at most 6 per 30 Hz step, so they share
 the ripple pass's cost and its limit of 48. Lightning fires under the thunder palette at a weight of at least 0.4, or
