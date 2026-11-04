@@ -6,6 +6,7 @@
 #include "fog_data.h"
 #include "engine_actors.h"
 #include "engine_lights.h"
+#include "sky_clouds.h"
 #include "water_types.h"
 #include "weather_director.h"
 
@@ -37,6 +38,21 @@ struct FrameInputs
     LocalLightInputs localLights;
 };
 
+struct SkyCloudInputs
+{
+    float cameraRelativeView[16];
+    float glProjection[16];
+    D3DVIEWPORT9 viewport;
+    float camPos[3];
+    float toLight[3];
+    uint32_t sunColor;
+    uint32_t directColor;
+    uint32_t ambientColor;
+    uint32_t skyMiddleColor;
+    OvercastReading overcast;
+    float flash;
+};
+
 constexpr int kSkyColorCount = 6;
 constexpr int kWaterColorPair = 2;
 
@@ -58,6 +74,8 @@ constexpr uintptr_t kGetProcAddressThunk = 0x0041C654;
 
 constexpr uintptr_t kWorldRenderSite = 0x004FB03D;
 constexpr uintptr_t kWorldRenderTarget = 0x004F8EA0;
+constexpr uintptr_t kSkyPassSite = 0x0079ACBC;
+constexpr uintptr_t kSkyPassTarget = 0x007F09B0;
 constexpr uintptr_t kOpaqueM2PassSite = 0x004F911D;
 constexpr uintptr_t kOpaqueM2PassTarget = 0x00823CB0;
 constexpr uintptr_t kLiquidSurfaceSite = 0x004F9170;
@@ -145,6 +163,8 @@ void ClearOpaqueState();
 
 WeatherReading LastWeatherReading();
 WeatherLook LastWeatherLook();
+OvercastReading LastOvercast();
+bool BuildSkyCloudInputs(IDirect3DDevice9* device, SkyCloudInputs& out);
 bool BuildFrameInputs(FrameInputs& out, bool withPointLights, const PointLightUpload& upload);
 bool BuildWaterInputs(WaterInputs& out);
 bool WaterClientLayoutMatches();

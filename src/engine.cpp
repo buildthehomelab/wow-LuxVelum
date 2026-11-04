@@ -79,7 +79,15 @@ constexpr size_t kMapWeatherTextureBytes = 260;
 constexpr uintptr_t kMapWeatherRainEffect = 0x13C;
 constexpr uintptr_t kMapWeatherSnowEffect = 0x140;
 constexpr uintptr_t kMapWeatherSandEffect = 0x144;
+constexpr uintptr_t kLightSwapCount = 0x00D39018;
+constexpr uintptr_t kLightSwapEntries = 0x00D3901C;
+constexpr uintptr_t kLightSwapStride = 0x18;
+constexpr uintptr_t kLightSwapAreaLight = 0x00;
+constexpr uintptr_t kLightSwapLightCopy = 0x04;
+constexpr uintptr_t kLightSwapFade = 0x08;
+constexpr uint32_t kMostLightSwapsRead = 4096;
 
+constexpr int kSkyMiddleColorIndex = 1;
 constexpr uintptr_t kLightSkyColors[kSkyColorCount] = {0x00D38BE0, 0x00D38BE4, 0x00D38BE8,
                                                        0x00D38BEC, 0x00D38BF0, 0x00D38BF4};
 constexpr uintptr_t kLightRiverColors[kWaterColorPair] = {0x00D38C14, 0x00D38C18};
@@ -414,6 +422,27 @@ void StepWeatherLook(const Config& cfg)
     g_weatherLook = director.Step(reading, WeatherTuningFrom(cfg), ClockSeconds());
 }
 
+OvercastReading g_overcast;
+
+OvercastReading ReadClientOvercast()
+{
+    OvercastReading reading;
+    const uintptr_t entries = Read<uintptr_t>(kLightSwapEntries);
+    if (!entries)
+        return reading;
+    const uint32_t count = std::min(Read<uint32_t>(kLightSwapCount), kMostLightSwapsRead);
+    for (uint32_t i = 0; i < count; ++i)
+    {
+        const uintptr_t entry = entries + i * kLightSwapStride;
+        const uintptr_t lightCopy = Read<uintptr_t>(entry + kLightSwapLightCopy);
+        if (lightCopy)
+            AddLightSwapToOvercast(reading, Read<uint32_t>(entry + kLightSwapAreaLight), Read<uint32_t>(lightCopy),
+                                   Read<float>(entry + kLightSwapFade));
+    }
+    FinishOvercast(reading);
+    return reading;
+}
+
 LightParamsSelection ReadLightParamsSelection()
 {
     LightParamsSelection selection;
@@ -463,6 +492,23 @@ LocalLightCamera FrameLightCamera(const FrameInputs& in)
     return camera;
 }
 
+bool ReadToLight(float* toLight)
+{
+    const float dayFraction = Read<float>(kDayFraction);
+    const float dayStart = Read<float>(kSunDayStart);
+    const float dayEnd = Read<float>(kSunDayEnd);
+    const bool moon = !(dayFraction >= dayStart && dayFraction <= dayEnd);
+    float center[3];
+    float body[3];
+    ReadFloats(kSkyCenter, center, 3);
+    ReadFloats(moon ? kMoonPosition : kSunPosition, body, 3);
+    toLight[0] = body[0] - center[0];
+    toLight[1] = body[1] - center[1];
+    toLight[2] = body[2] - center[2];
+    Normalize(toLight);
+    return moon;
+}
+
 bool BuildFrameInputsUnsafe(FrameInputs& out, bool withPointLights, const PointLightUpload& upload)
 {
     std::memcpy(out.cameraRelativeView, g_opaque.cameraRelativeView, sizeof(out.cameraRelativeView));
@@ -472,17 +518,7 @@ bool BuildFrameInputsUnsafe(FrameInputs& out, bool withPointLights, const PointL
     ReadFloats(kCameraTarget, out.camTarget, 3);
 
     out.dayFraction = Read<float>(kDayFraction);
-    float dayStart = Read<float>(kSunDayStart);
-    float dayEnd = Read<float>(kSunDayEnd);
-    out.lightIsMoon = !(out.dayFraction >= dayStart && out.dayFraction <= dayEnd);
-    float center[3];
-    float body[3];
-    ReadFloats(kSkyCenter, center, 3);
-    ReadFloats(out.lightIsMoon ? kMoonPosition : kSunPosition, body, 3);
-    out.toLight[0] = body[0] - center[0];
-    out.toLight[1] = body[1] - center[1];
-    out.toLight[2] = body[2] - center[2];
-    Normalize(out.toLight);
+    out.lightIsMoon = ReadToLight(out.toLight);
 
     out.fogColor = Read<uint32_t>(kFogColor);
     out.fogStart = Read<float>(kFogGroupStart[kFrameInputsFogGroup]);
@@ -1002,6 +1038,38 @@ WeatherReading LastWeatherReading()
 WeatherLook LastWeatherLook()
 {
     return g_weatherLook;
+}
+
+OvercastReading LastOvercast()
+{
+    return g_overcast;
+}
+
+bool BuildSkyCloudInputs(IDirect3DDevice9* device, SkyCloudInputs& out)
+{
+    __try
+    {
+        OpaqueState state = {};
+        if (!CaptureOpaqueStateUnsafe(device, state))
+            return false;
+        std::memcpy(out.cameraRelativeView, state.cameraRelativeView, sizeof(out.cameraRelativeView));
+        std::memcpy(out.glProjection, state.glProjection, sizeof(out.glProjection));
+        out.viewport = state.viewport;
+        ReadFloats(kCameraPosition, out.camPos, 3);
+        ReadToLight(out.toLight);
+        out.sunColor = Read<uint32_t>(kSunColor);
+        out.directColor = Read<uint32_t>(kDirectColor);
+        out.ambientColor = Read<uint32_t>(kAmbientColor);
+        out.skyMiddleColor = Read<uint32_t>(kLightSkyColors[kSkyMiddleColorIndex]);
+        g_overcast = ReadClientOvercast();
+        out.overcast = g_overcast;
+        out.flash = g_weatherLook.flash;
+        return true;
+    }
+    __except (EXCEPTION_EXECUTE_HANDLER)
+    {
+        return false;
+    }
 }
 
 bool BuildFrameInputs(FrameInputs& out, bool withPointLights, const PointLightUpload& upload)

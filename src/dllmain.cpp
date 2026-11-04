@@ -90,6 +90,7 @@ void Attach(HMODULE module)
     if (engineHooks)
     {
         PrepareAuthoredNoise();
+        InstallSkyCloudHook();
         InstallTransparentFogHooks();
         EnableForeverLookOnHookedClient();
     }

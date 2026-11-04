@@ -23,6 +23,7 @@ public:
     bool Render(IDirect3DDevice9* dev, const SceneDepth& depth, const FrameInputs& in, const Config& cfg,
                 FogPass pass = FogPass::WholeFrame);
     bool RenderGodRaysAfterWorld(IDirect3DDevice9* dev, const SceneDepth& depth);
+    bool RenderSkyClouds(IDirect3DDevice9* dev, const SceneDepth& depth, const SkyCloudInputs& in, const Config& cfg);
     bool ReadyToRender(IDirect3DDevice9* dev, const SceneDepth& depth, const D3DVIEWPORT9& vp);
 
     const StockFogFit& LastStockFogFit() const { return m_stockFogFit; }
@@ -100,6 +101,11 @@ private:
                          const float* viewToWorld, const float* toLightInView, const float* sunPx, float rayStrength);
     void BindTexture(IDirect3DDevice9* dev, DWORD stage, IDirect3DBaseTexture9* tex, bool linear);
     void BindWrappedVolume(IDirect3DDevice9* dev, DWORD stage, IDirect3DVolumeTexture9* volume);
+    bool EnsureCloudField(IDirect3DDevice9* dev);
+    void AdvanceCloudDrift(const OvercastReading& overcast, const Config& cfg, long long now);
+    void LogCloudState(IDirect3DDevice9* dev, const OvercastReading& overcast, long long now);
+    void DrawSkyClouds(IDirect3DDevice9* dev, const SkyCloudInputs& in, const Config& cfg,
+                       const OvercastReading& overcast, const CloudShape& shape, const CloudTuning& tuning);
     FogParams DrawableFog(IDirect3DDevice9* dev, const FogParams& fog);
     void UploadLayerNoise(IDirect3DDevice9* dev, const FogParams& fog, const float* camera, long long now);
     bool RenderPasses(IDirect3DDevice9* dev, const SceneDepth& depth, IDirect3DSurface9* target,
@@ -129,6 +135,7 @@ private:
     IDirect3DPixelShader9* m_rayBlur = nullptr;
     IDirect3DPixelShader9* m_rayComposite = nullptr;
     IDirect3DPixelShader9* m_probe = nullptr;
+    IDirect3DPixelShader9* m_clouds = nullptr;
     IDirect3DVertexDeclaration9* m_decl = nullptr;
     IDirect3DStateBlock9* m_state = nullptr;
 
@@ -140,6 +147,7 @@ private:
     IDirect3DTexture9* m_localLightData = nullptr;
     IDirect3DVolumeTexture9* m_densityNoise = nullptr;
     IDirect3DVolumeTexture9* m_authoredNoise = nullptr;
+    IDirect3DTexture9* m_cloudField = nullptr;
     AuthoredNoiseScroll m_noiseScroll;
     long long m_noiseTicks = 0;
     IDirect3DTexture9* m_probeTarget = nullptr;
@@ -147,6 +155,7 @@ private:
     IDirect3DQuery9* m_probeCopied = nullptr;
     PendingDepthProbe m_pendingProbe;
     GpuTimer m_gpuTimer{"fog"};
+    GpuTimer m_cloudTimer{"clouds"};
     StockFogFit m_stockFogFit;
     GodRayFrame m_lateGodRays;
     UINT m_lowW = 0;
@@ -173,6 +182,11 @@ private:
     long long m_prevTicks = 0;
     long long m_weatherWindTicks = 0;
     double m_weatherWindPhase = 0.0;
+    long long m_cloudTicks = 0;
+    long long m_cloudSummaryTicks = 0;
+    double m_cloudDrift = 0.0;
+    double m_cloudWarpDrift = 0.0;
+    float m_loggedOvercast = -1.0f;
     unsigned m_frame = 0;
     unsigned m_logged = 0;
     long long m_summaryTicks = 0;

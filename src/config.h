@@ -55,6 +55,13 @@ struct Config
     float noiseWindSpeed = 0.5f;
     bool classicNoise = true;
     bool weatherEffects = true;
+    bool stormClouds = true;
+    float cloudPreviewWeight = 0.0f;
+    float cloudPreviewStorm = 0.0f;
+    float cloudFairCover = 0.0f;
+    float cloudDarkness = 1.0f;
+    float cloudOpacity = 1.0f;
+    float cloudWind = 1.0f;
     float weatherStrength = 1.0f;
     float weatherEaseSeconds = 30.0f;
     float weatherAfterRainMist = 0.5f;
