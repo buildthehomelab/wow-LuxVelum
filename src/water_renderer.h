@@ -10,6 +10,7 @@
 #include "water_fft.h"
 #include "water_ripples.h"
 #include "water_rain.h"
+#include "water_flow.h"
 #include "water_types.h"
 
 #include <d3d9.h>
@@ -121,6 +122,7 @@ private:
         Float4 rippleWindow;
         Float4 rippleShape;
         Float4 rippleFade;
+        Float4 flow;
     };
 
     struct FoamMaskTexture

@@ -11,6 +11,7 @@
 #include "grading_renderer.h"
 #include "local_light_stabiliser.h"
 #include "log.h"
+#include "water_flow.h"
 #include "water_rain.h"
 #include "weather_director.h"
 #include "msaa_depth.h"
@@ -1961,6 +1962,7 @@ void CheckSettingsWindowKeepsItsSize(Harness& h, const PanelRect& expected, cons
 }
 
 #include "weather_director_checks.h"
+#include "water_flow_checks.h"
 #include "sky_clouds_checks.h"
 #include "lightning_bolt_checks.h"
 #include "authored_fog_checks.h"
@@ -2049,6 +2051,7 @@ int Run(const std::wstring& outDir, const std::string& dataPath, const std::wstr
     CheckClassicData(classic);
     CheckStormBlendsLayersByClassicIndex(classic);
     weather_director_checks::Run();
+    water_flow_checks::Run();
     sky_clouds_checks::Run();
     lightning_bolt_checks::Run();
     CheckScreenEffectLightSlot(classic);

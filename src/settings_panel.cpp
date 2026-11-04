@@ -33,7 +33,7 @@ const char* const kWaterQualityNames[] = {"Low: 128 waves, sky reflections only"
                                           "Medium: 256 waves, scene reflections",
                                           "High: 256 waves, finer scene reflections"};
 const char* const kWaterDebugViewNames[] = {"Off",        "Normals",      "Foam",   "Transmittance",
-                                           "Reflection", "Liquid class", "Ripples"};
+                                           "Reflection", "Liquid class", "Ripples", "Flow"};
 
 template <int N>
 bool Choice(const char* label, int& value, int first, const char* const (&names)[N], const char* help)
@@ -444,6 +444,9 @@ bool DrawWater(Config& c)
     changed |= Slider("Zone colours", c.waterZoneColors, 0.0f, 1.0f, "%.2f",
                       "How much the zone's own water colours from the client's lights tint the water, 0 = the modern "
                       "colours only");
+    changed |= Slider("Flow", c.waterFlow, 0.0f, 2.0f, "%.2f",
+                      "Waves and foam run downhill on water whose surface slopes, faster where it's steeper, with "
+                      "whitewater on the steepest stretches. Flat water stays still. 0 = off");
     changed |= Slider("Ripples", c.waterRipples, 0.0f, 2.0f, "%.2f",
                       "Wakes of players, creatures, pets and mounts in the water: a thin V behind a unit that runs or "
                       "swims, one ring as it starts or stops, a calm surface while it stands. 0.5 = default, 0 = none");

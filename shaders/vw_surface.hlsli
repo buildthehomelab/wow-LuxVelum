@@ -9,6 +9,23 @@ static const float kMinRayRise = 1e-4;
 static const float kRippleSlopeScale = 3;
 static const float kRippleFullDetailTexels = 2;
 static const float kRippleDetailFadeTexels = 2;
+static const float kFlowProbeYards = 6;
+static const float kFlowNarrowProbeYards = 1.5;
+static const float kFlowMaxProbePixels = 128;
+static const float kFlowWaterDepthMargin = 0.02;
+static const float kFlowFlatSlope = 0.03;
+static const float kFlowFullSlope = 0.10;
+static const float kFlowBankSlope = 0.9;
+static const float kFlowWallSlope = 1.4;
+static const float kFlowFullDistance = 200;
+static const float kFlowFadeDistance = 120;
+static const float kFlowBaseSpeed = 1.2;
+static const float kFlowSpeedPerSlope = 8;
+static const float kFlowMaxSpeed = 6;
+static const float kFlowWhitewaterSlope = 0.15;
+static const float kFlowWhitewaterPerSlope = 2.5;
+static const float kFlowMaxWhitewater = 0.6;
+static const float kFlowCorrelatedYards = 8;
 
 struct WaterPixel
 {
@@ -27,6 +44,13 @@ struct WaveState
 {
     float4 moments;
     float2 foam;
+};
+
+struct WaterFlow
+{
+    float2 travel;
+    float weight;
+    float whitewater;
 };
 
 struct RippleSample
@@ -78,6 +102,69 @@ WaterPixel ReconstructWaterPixel(float2 pixel)
     w.footprintX = PlaneFootprint(worldRay, rayStepX, w.waterZ);
     w.footprintY = PlaneFootprint(worldRay, rayStepY, w.waterZ);
     return w;
+}
+
+float4 WaterProbe(float2 pixel, float3 centre)
+{
+    float2 uv = CopyUv(pixel);
+    float z = CopiedViewDepth(sWaterDepth, uv);
+    float onWater = CopiedViewDepth(sSceneDepth, uv) > z + kFlowWaterDepthMargin ? 1 : 0;
+    float3 worldRay = ViewToWorldDirection(ViewRayAtUnitDepth(pixel));
+    return float4(CameraPositionWorld() + worldRay * z - centre, onWater);
+}
+
+float4 FlatterWaterStep(float2 pixel, float3 centre, float2 axis, float2 footprint, float yards)
+{
+    float2 offset = axis * round(clamp(yards / max(length(footprint), 1e-3), 1, kFlowMaxProbePixels));
+    float4 forward = WaterProbe(pixel + offset, centre);
+    float4 backward = WaterProbe(pixel - offset, centre);
+    backward.xyz = -backward.xyz;
+    if (forward.w > 0 && backward.w > 0)
+        return abs(forward.z) < abs(backward.z) ? forward : backward;
+    return forward.w > 0 ? forward : backward;
+}
+
+float3 SurfaceStep(float2 pixel, float3 centre, float2 axis, float2 footprint)
+{
+    float4 step = FlatterWaterStep(pixel, centre, axis, footprint, kFlowProbeYards);
+    [branch] if (step.w <= 0)
+    {
+        step = FlatterWaterStep(pixel, centre, axis, footprint, kFlowNarrowProbeYards);
+        step.z *= step.w;
+    }
+    return step.xyz;
+}
+
+WaterFlow SurfaceFlow(WaterPixel w, float2 pixel)
+{
+    WaterFlow flow = (WaterFlow)0;
+    float distanceFade = saturate((kFlowFullDistance + kFlowFadeDistance - w.cameraDistance) / kFlowFadeDistance);
+    [branch] if (FlowStrength() > 0 && distanceFade > 0)
+    {
+        float3 normal = cross(SurfaceStep(pixel, w.position, float2(1, 0), w.footprintX),
+                              SurfaceStep(pixel, w.position, float2(0, 1), w.footprintY));
+        normal *= normal.z < 0 ? -1 : 1;
+        float2 downhill = normal.xy / max(normal.z, 1e-4);
+        float slope = length(downhill);
+        flow.weight = smoothstep(kFlowFlatSlope, kFlowFullSlope, slope) *
+                      (1 - smoothstep(kFlowBankSlope, kFlowWallSlope, slope)) * distanceFade;
+        float speed = min((kFlowBaseSpeed + kFlowSpeedPerSlope * slope) * FlowStrength(), kFlowMaxSpeed);
+        flow.travel = downhill / max(slope, 1e-4) * speed * FlowCycleSeconds() * flow.weight;
+        flow.whitewater = min(max(slope - kFlowWhitewaterSlope, 0) * kFlowWhitewaterPerSlope, kFlowMaxWhitewater) *
+                          flow.weight * saturate(FlowStrength());
+    }
+    return flow;
+}
+
+WaterPixel MovedAlongFlow(WaterPixel w, WaterFlow flow, float phase)
+{
+    w.position.xy -= flow.travel * (phase - 0.5);
+    return w;
+}
+
+float FlowLayerWeight(float phase)
+{
+    return 1 - abs(2 * phase - 1);
 }
 
 float4 SampleTile(sampler2D tile, WaterPixel w, float inverseSize)
@@ -133,7 +220,7 @@ RippleSample SampleRipples(WaterPixel w)
     return ripples;
 }
 
-WaveState SampleWaves(WaterPixel w, float2 rippleSlope)
+WaveState SampleStillWaves(WaterPixel w)
 {
     float4 inverseSize = cInverseTileSizes;
     float4 weight = float4(ShallowTileWeight(inverseSize.x, w.columnDepth),
@@ -145,11 +232,34 @@ WaveState SampleWaves(WaterPixel w, float2 rippleSlope)
                     weight.y * SampleTile(sSurface1, w, inverseSize.y) +
                     weight.z * SampleTile(sSurface2, w, inverseSize.z) +
                     weight.w * SampleTile(sSurface3, w, inverseSize.w);
-    waves.moments.xy += rippleSlope;
     waves.foam = weight.x * SampleFoamState(sFoamState0, w, inverseSize.x) +
                  weight.y * SampleFoamState(sFoamState1, w, inverseSize.y) +
                  weight.z * SampleFoamState(sFoamState2, w, inverseSize.z) +
                  weight.w * SampleFoamState(sFoamState3, w, inverseSize.w);
+    return waves;
+}
+
+WaveState SampleWaves(WaterPixel w, float2 rippleSlope, WaterFlow flow)
+{
+    WaveState waves;
+    [branch] if (flow.weight > 0)
+    {
+        float firstWeight = FlowLayerWeight(FlowFirstPhase());
+        float secondWeight = 1 - firstWeight;
+        WaveState first = SampleStillWaves(MovedAlongFlow(w, flow, FlowFirstPhase()));
+        WaveState second = SampleStillWaves(MovedAlongFlow(w, flow, FlowSecondPhase()));
+        waves.moments = first.moments * firstWeight + second.moments * secondWeight;
+        waves.foam = first.foam * firstWeight + second.foam * secondWeight;
+        float layersAlike = saturate(1 - 0.5 * length(flow.travel) / kFlowCorrelatedYards);
+        float blendedVariance = firstWeight * firstWeight + secondWeight * secondWeight +
+                                2 * firstWeight * secondWeight * layersAlike;
+        waves.moments.xy *= rsqrt(blendedVariance);
+    }
+    else
+    {
+        waves = SampleStillWaves(w);
+    }
+    waves.moments.xy += rippleSlope;
     return waves;
 }
 
@@ -202,12 +312,12 @@ float4 WaveFoam(float2 adtUv, float2 dx, float2 dy, float f)
     return saturate(low * rootF + mid * f * rootF + high * pow(f, 4.5)) * WaveFoamIntensity();
 }
 
-float4 FoamAlbedo(WaterPixel w, WaveState waves)
+float4 StillFoamAlbedo(WaterPixel w, WaveState waves, float whitewater)
 {
     float2 adtUv = AdtUv(w.position, waves.moments.xy);
     float2 dx = -w.footprintX.yx * kAdtTilesPerYard;
     float2 dy = -w.footprintY.yx * kAdtTilesPerYard;
-    float f = max(waves.foam.x, 0);
+    float f = max(waves.foam.x, 0) + whitewater;
     float shoreWeight = cShoreFoam.x * FoamFade(w.columnDepth * ShoreDistancePerDepth(), cShoreFoam.z);
     float depthWeight = cDepthFadeFoam.x * FoamFade(w.sceneZ - w.waterZ, cDepthFadeFoam.z);
     float4 foam = 0;
@@ -220,4 +330,15 @@ float4 FoamAlbedo(WaterPixel w, WaveState waves)
         foam += depthWeight * FoamLayer(sDepthFoamMask, kDepthFoamSlot, adtUv * cDepthFadeFoam.y + cDepthFoamScroll.xy,
                                         dx * cDepthFadeFoam.y, dy * cDepthFadeFoam.y);
     return saturate(foam);
+}
+
+float4 FoamAlbedo(WaterPixel w, WaveState waves, WaterFlow flow)
+{
+    [branch] if (flow.weight > 0)
+    {
+        float firstWeight = FlowLayerWeight(FlowFirstPhase());
+        return StillFoamAlbedo(MovedAlongFlow(w, flow, FlowFirstPhase()), waves, flow.whitewater) * firstWeight +
+               StillFoamAlbedo(MovedAlongFlow(w, flow, FlowSecondPhase()), waves, flow.whitewater) * (1 - firstWeight);
+    }
+    return StillFoamAlbedo(w, waves, 0);
 }
