@@ -331,14 +331,21 @@ void AddLightningFlash(float flash, FogParams& fog)
         return;
     float light[3] = {kLightningFlashColor[0], kLightningFlashColor[1], kLightningFlashColor[2]};
     Encode(light, fog.linear);
+    auto brighten = [&](float* rgb) {
+        const float gain = kLightningFlashFloor + kLightningFlashPerEmissive * Luminance(rgb);
+        for (int channel = 0; channel < 3; ++channel)
+            rgb[channel] += light[channel] * flash * gain;
+    };
     for (FogLayer& layer : fog.layers)
     {
         if (layer.density <= 0.0f)
             continue;
-        const float gain = kLightningFlashFloor + kLightningFlashPerEmissive * Luminance(layer.emissive);
-        for (int channel = 0; channel < 3; ++channel)
-            layer.emissive[channel] += light[channel] * flash * gain;
+        brighten(layer.emissive);
+        brighten(layer.shadowEmissive);
     }
+    for (LayerNoise& noise : fog.noise)
+        if (noise.alpha > 0.0f)
+            brighten(noise.fade);
 }
 
 void ApplyInteriorFog(float weight, const Config& cfg, FogParams& fog)

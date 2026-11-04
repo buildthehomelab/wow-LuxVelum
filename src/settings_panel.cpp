@@ -241,7 +241,7 @@ const WeatherSlider kWeatherSliders[] = {
     {"Patchiness",
      {&Config::rainVariation, &Config::snowVariation, &Config::sandVariation, &Config::fogVariation,
       &Config::ashVariation},
-     
+
      4.0f, "How uneven the mist looks, where the area's storm fog has no drifting banks of its own"},
     {"Tint", {&Config::rainTint, &Config::snowTint, &Config::sandTint, &Config::fogTint, &Config::ashTint}, 1.0f,
      "How far the fog turns to this weather's colour instead of the area's"},

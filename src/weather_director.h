@@ -104,6 +104,7 @@ private:
     float NextUnit();
 
     bool m_started = false;
+    int m_lastMapId = 0;
     double m_lastSeconds = 0.0;
     float m_blend[kWeatherKinds] = {};
     float m_wetness = 0.0f;

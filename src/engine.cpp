@@ -399,8 +399,9 @@ WeatherReading ReadClientWeather()
     reading.mapId = Read<int32_t>(kCurrentMap);
     float camera[3];
     ReadFloats(kCameraPosition, camera, 3);
-    reading.position[0] = camera[0];
-    reading.position[1] = camera[1];
+    const bool cameraKnown = Finite(camera, 3);
+    reading.position[0] = cameraKnown ? camera[0] : g_weatherReading.position[0];
+    reading.position[1] = cameraKnown ? camera[1] : g_weatherReading.position[1];
     return reading;
 }
 

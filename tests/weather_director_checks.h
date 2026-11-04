@@ -198,6 +198,45 @@ void CheckWetGroundStaysPut()
     Check(director.Step(clear, tuning, now).wetness == 0.0f, "and changing map dries the place for good");
 }
 
+void CheckNewRainElsewhere()
+{
+    const WeatherTuning tuning = TestTuning();
+    WeatherReading rain;
+    rain.type = kClientWeatherRain;
+    rain.intensity = 1.0f;
+    WeatherDirector director;
+    double now = kStart;
+    director.Step(rain, tuning, now);
+    now += tuning.wetSeconds;
+    director.Step(rain, tuning, now);
+    WeatherReading clear = rain;
+    clear.type = kClientWeatherNone;
+    clear.intensity = 0.0f;
+    now += tuning.easeSeconds;
+    director.Step(clear, tuning, now);
+    WeatherReading farRain = rain;
+    farRain.position[0] = 800.0f;
+    farRain.intensity = 0.3f;
+    now += 1.0 / 30.0;
+    const WeatherLook arriving = director.Step(farRain, tuning, now);
+    Check(arriving.wetness < 0.01f && arriving.density < 1.01f,
+          "new rain far away starts dry, instead of bringing the old place's wet ground");
+}
+
+void CheckMapChangeAppliesAtOnce()
+{
+    const WeatherTuning tuning = TestTuning();
+    WeatherReading rain;
+    rain.type = kClientWeatherRain;
+    rain.intensity = 1.0f;
+    WeatherDirector director;
+    director.Step(rain, tuning, kStart);
+    WeatherReading elsewhere;
+    elsewhere.mapId = 1;
+    Check(director.Step(elsewhere, tuning, kStart + 1.0).stormBlend == 0.0f,
+          "a new map shows its own weather straight away");
+}
+
 void CheckTintColour()
 {
     WeatherDirector director;
@@ -269,7 +308,8 @@ void CheckLightning()
     Check(WeatherLightningEnvelope(0.0) == 0.0f && WeatherLightningEnvelope(0.03) > 0.5f &&
               WeatherLightningEnvelope(0.1) < WeatherLightningEnvelope(0.03),
           "a strike rises quickly, not instantly, and falls");
-    Check(WeatherLightningEnvelope(0.2) > WeatherLightningEnvelope(0.17), "a strike has a second stroke");
+    Check(WeatherLightningEnvelope(0.21) > WeatherLightningEnvelope(0.17), "a strike has a second stroke");
+    Check(WeatherLightningEnvelope(0.181) < WeatherLightningEnvelope(0.21), "the second stroke rises too");
     Check(WeatherLightningEnvelope(-0.1) == 0.0f && WeatherLightningEnvelope(2.0) == 0.0f, "a flash ends");
 
     WeatherTuning tuning = TestTuning();
@@ -360,6 +400,8 @@ void Run()
     CheckStrength();
     CheckAfterRain();
     CheckWetGroundStaysPut();
+    CheckNewRainElsewhere();
+    CheckMapChangeAppliesAtOnce();
     CheckTintColour();
     CheckGodRays();
     CheckIndoors();

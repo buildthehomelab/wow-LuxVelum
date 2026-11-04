@@ -1143,7 +1143,8 @@ bool WaterRenderer::SimulateRipples(IDirect3DDevice9* dev, double seconds)
             m_contacts.TakeDisturbances(schedule.stepSeconds[step], disturbances, kMaxWaterRippleDisturbances);
         const float rainHalfExtent = texels * kWaterRippleTexelYards * kRainWindowShare;
         const float windowShare = static_cast<float>(texels) / kWaterRippleTexels;
-        count += m_rainDrops.Take(rainDropsPerStep * windowShare * windowShare, centre, rainHalfExtent,
+        const float cappedDrops = std::min(rainDropsPerStep, static_cast<float>(kMaxWaterRainDropsPerStep));
+        count += m_rainDrops.Take(cappedDrops * windowShare * windowShare, centre, rainHalfExtent,
                                   disturbances + count, kMaxWaterRippleDisturbances - count);
         m_ripples.Step(dev, centre, disturbances, count);
     }
