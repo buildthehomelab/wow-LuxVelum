@@ -296,9 +296,9 @@ the overcast reading, the cover, the colours' order and the field.
 
 Rain rings are ordinary ripple disturbances at random points around the camera, at most 6 per 30 Hz step, so they share
 the ripple pass's cost and its limit of 48. Lightning fires under the thunder palette at a weight of at least 0.4, or
-without an overcast in heavy rain, and not in ash. It's a timer in the DLL, not the client's own strokes, so a flash
-need not match a thunder sound. Its brightness follows the fog's, so a dark night gets a smaller jump than a fixed
-colour would give.
+without an overcast in heavy rain, and not in ash or for 15 seconds after it, as the palette fades more slowly than the
+ash. It's a timer in the DLL, not the client's own strokes, so a flash need not match a thunder sound. Its brightness
+follows the fog's, so a dark night gets a smaller jump than a fixed colour would give.
 
 The converter keeps the fog rows the Classic client selects (flag bit 3) at their layer index (0–2). At run
 time the DLL blends the Classic lights around the camera: spheres at full weight inside the falloff start and
@@ -858,7 +858,7 @@ its comments describe every key. In the game, `Ctrl+F7` opens the same settings 
 | `WeatherEaseSeconds` | 30 | Seconds for weather to come in fully or pass |
 | `WeatherAfterRainMist`, `WeatherDryingSeconds` | 0.5, 600 | Extra mist while the ground is wet, and the seconds it takes to dry |
 | `WeatherLowSunRays`, `WeatherClearingRays` | 0.5, 1.0 | God rays in clear weather at a low sun, and as a front passes |
-| `WeatherRainRings`, `WeatherLightning`, `WeatherDawnMist` | 1.0, 1.0, 0.4 | Rain rings on water, flashes in a thunderstorm, and mist around sunrise; 0 = none |
+| `WeatherRainRings`, `WeatherLightning`, `WeatherDawnMist` | 1.0, 0.8, 0.4 | Rain rings on water, flashes in a thunderstorm, and mist around sunrise; 0 = none |
 | `Rain*`, `Snow*`, `Sand*`, `Fog*` | see `LuxVelum.ini` | Each kind's `Sun`, `Rays`, `Exposure`, `Density`, `Drift`, `Variation`, `Tint`, `Waves`, `Wind`, `Foam` and `Glint` at full intensity |
 | `StockFog` | 1 | 1 replaces the stock fog with the distance fog, 0 keeps it |
 | `TransparentFog` | 0 | 1 fogs see-through effects at their own distance, 0 at the scene behind (see Transparent fog) |

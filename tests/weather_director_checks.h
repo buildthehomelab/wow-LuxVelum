@@ -389,19 +389,19 @@ void CheckLightning()
     WeatherDirector flapping;
     double lastStrike = -1000.0;
     double shortestGap = 1000.0;
-    bool flashingBefore = false;
+    float seedBefore = 0.0f;
     for (int frame = 0; frame < kFrames; ++frame)
     {
         WeatherReading flapped = thunderOnly;
         flapped.thunderOvercast = (frame / 15) % 2 ? 0.41f : 0.39f;
         const double now = kStart + frame * kFrame;
-        const bool flashingNow = flapping.Step(flapped, tuning, now).flash > 0.3f;
-        if (flashingNow && !flashingBefore)
+        const float seedNow = flapping.Step(flapped, tuning, now).strikeSeed;
+        if (seedNow != seedBefore)
         {
             shortestGap = std::min(shortestGap, now - lastStrike);
             lastStrike = now;
         }
-        flashingBefore = flashingNow;
+        seedBefore = seedNow;
     }
     Check(shortestGap >= 7.9, "a storm at the edge of the threshold keeps strikes at least 8 seconds apart");
 
