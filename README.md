@@ -375,6 +375,22 @@ to R, G and B, so the file keeps 32 codes per LUT and the converter fails otherw
 left out). The curve is interpolated between the nearest keys that set one, wrapping past midnight (inferred). Glow
 and grading blend like the fog, on every map with a placed light.
 
+## Water flow
+
+The client's liquid meshes carry a height per vertex and already slope: Elwynn's streams drop about 7 yards over one
+33-yard chunk. So the water pass reads the slope from the water depth it has copied. It reconstructs the surface about 4
+yards to each side of a pixel, at most 12 pixels away, taking whichever side of each axis is flatter so that a bank doesn't
+count as water. That distance reaches over the triangles of the 4-yard liquid grid, whose facets would otherwise show.
+
+Waves and foam are then sampled twice at positions moved downhill, half a cycle apart, each layer fully faded out when
+it jumps back (a two-phase flow map). The cycle is 1.6 seconds. Speed is 1.2 yd/s plus 8 per unit of slope, at most 8
+yd/s. Flow fades in between slopes of 0.03 and 0.10, out above 0.9 as a bank, and out from 200 to 320 yards from the
+camera. Slopes above 0.15 add whitewater through the wave foam. Flat water takes the same path as before, so it costs
+nothing beyond reading the slope. `WaterDebugView=7` shows the field: red and green for direction, brighter for stronger.
+
+This is not known to be Forever's method: its shaders weren't readable. In its build the water sampled has zero flow in
+`LiquidObject` and no flow UVs, and its heights match the client's. Not confirmed in game.
+
 ## Forever water data
 
 `tools/convert_forever_water.py` converts the WoW Forever water kit (a folder or its zip: decoded `LiquidType`,
@@ -919,6 +935,7 @@ its comments describe every key. In the game, `Ctrl+F7` opens the same settings 
 | `WaterSpecular` | 1 | Sun or moon glint 0..4 |
 | `WaterClarity` | 1 | How far you see into the water 0.25..4 |
 | `WaterZoneColors` | 0.5 | Tint by the zone's own water colours 0..1 |
+| `WaterFlow` | 1.0 | Waves and foam run downhill on sloped water, with whitewater where it's steepest, 0..3; 0 = off |
 | `WaterRipples` | 0.5 | Wakes of units in the water 0..2; 0 = no unit reads and no ripple simulation |
 | `WaterClientSplashes` | 0 | 1 keeps the client's splash and wake sprites; 0 hides them for all units while wakes run |
 | `WaterDebugView` | 0 | 1 wave normals, 2 foam, 3 transmittance, 4 reflection, 5 liquid class, 6 ripple height |
@@ -979,8 +996,9 @@ Forever in the game, so by default colours still differ from Classic.
   fog up to the 3.3.5 far clip, which is far shorter than the modern client's.
 - `FarClipMax` raises memory use (about four times the loaded terrain in a 32-bit process); Ascension's reason
   for the continent cap is unknown. Without the key in the INI it stays off.
-- Modern water: water seen from below keeps the client's look; rivers have no flow direction (the client has no
-  flow maps), so Forever's river foam is omitted; the surface stays flat and only its shading moves; reflections are
+- Modern water: water seen from below keeps the client's look; flat water has no flow direction (the client has no
+  flow maps), so only sloped water flows and Forever's river foam is omitted; the surface's own height doesn't change
+  with the waves, only its shading moves; reflections are
   screen-space, so what is off screen falls back to the sky colours; interiors are detected by liquid type only.
 - The noise column mapping, the noise volume and `ClassicPhase`'s normalisation are inferred; `ClassicPhase` stays 0.
 - `ForeverGlow` sets only the amount: the client's glow adds `g·blur²`, Forever's a linear term.

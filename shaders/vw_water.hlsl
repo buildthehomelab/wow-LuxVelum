@@ -9,6 +9,7 @@ static const float kDebugFoamCoverage = 2;
 static const float kDebugTransmittance = 3;
 static const float kDebugReflection = 4;
 static const float kDebugLiquidClass = 5;
+static const float kDebugRipples = 6;
 static const float kDebugRippleHeightGain = 4;
 static const float kDebugRippleWindowShade = 0.25;
 
@@ -24,7 +25,14 @@ float3 RippleColour(RippleSample ripples)
     return (height * lerp(1 - kDebugRippleWindowShade, 1, ripples.coverage)).xxx;
 }
 
-float3 DebugColour(float3 N, float4 foamAlbedo, float3 transmittance, float3 reflected, RippleSample ripples)
+float3 FlowColour(WaterFlow flow)
+{
+    float travelled = max(length(flow.travel), 1e-4);
+    return float3(0.5 + 0.5 * flow.travel.xy / travelled, 0.25) * (0.25 + 0.75 * flow.weight);
+}
+
+float3 DebugColour(float3 N, float4 foamAlbedo, float3 transmittance, float3 reflected, RippleSample ripples,
+                   WaterFlow flow)
 {
     float view = WaterDebugView();
     if (view < kDebugNormal + 0.5)
@@ -37,7 +45,9 @@ float3 DebugColour(float3 N, float4 foamAlbedo, float3 transmittance, float3 ref
         return LinearToGamma(reflected);
     if (view < kDebugLiquidClass + 0.5)
         return ClassColour(WaterClassIndex());
-    return RippleColour(ripples);
+    if (view < kDebugRipples + 0.5)
+        return RippleColour(ripples);
+    return FlowColour(flow);
 }
 
 float4 main(float2 pixelIndex : VPOS) : COLOR0
@@ -45,8 +55,9 @@ float4 main(float2 pixelIndex : VPOS) : COLOR0
     float2 pixel = pixelIndex + 0.5;
     WaterPixel w = ReconstructWaterPixel(pixel);
     RippleSample ripples = SampleRipples(w);
-    WaveState waves = SampleWaves(w, ripples.slope);
-    float4 foamAlbedo = FoamAlbedo(w, waves);
+    WaterFlow flow = SurfaceFlow(w, pixel);
+    WaveState waves = SampleWaves(w, ripples.slope, flow);
+    float4 foamAlbedo = FoamAlbedo(w, waves, flow);
 
     float3 N = normalize(float3(-waves.moments.xy, 1));
     float3 V = w.toCamera;
@@ -80,7 +91,7 @@ float4 main(float2 pixelIndex : VPOS) : COLOR0
     colour += sunSpecular + environmentAttenuation * environment;
 
     [branch] if (WaterDebugView() > 0.5)
-        return float4(DebugColour(N, foamAlbedo, transmittance, reflected, ripples), 1);
+        return float4(DebugColour(N, foamAlbedo, transmittance, reflected, ripples, flow), 1);
     float3 encoded = LinearToGamma(colour);
     [branch] if (StockFogApplies())
         encoded = lerp(StockFogColour(), encoded, StockFogVisibility(w.waterZ));
