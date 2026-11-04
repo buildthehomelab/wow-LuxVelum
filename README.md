@@ -215,7 +215,7 @@ checks that the fog table's layout hash is still `24290E20`, which keeps the col
 python tools/convert_classic_fog.py <kit folder or zip> --placements data/fogdata.bin data/fogdata.bin
 ```
 
-Evermore then runs `tools/duskwood_gloom.py` on the converted file, so run it again after every conversion:
+`tools/duskwood_gloom.py` then runs on the converted file, so run it again after every conversion:
 
 ```powershell
 python tools/duskwood_gloom.py <converted fogdata.bin> data/fogdata.bin
@@ -224,9 +224,13 @@ python tools/duskwood_gloom.py <converted fogdata.bin> data/fogdata.bin
 Forever authors Duskwood's fog cyan (light params 7791, used only by lights 2, 15 and 18, emissive `00CAFF` at noon).
 The tool takes layers 0 and 2 of its 12 time keys to a dim, cold grey-green (`2D4041` at noon), weakens and broadens the
 sun scattering, and thickens the far layer by a quarter. It leaves each key's direct light alone, because the DLL scales
-sun scattering by the client's direct light over it. Twilight Grove (light 41) and the Stranglethorn lights that reach
-south Duskwood keep their own colours. It also appends one unused grading curve, because the launcher compares client
-files by size: without a new size, players who already have the file would never receive the edit.
+sun scattering by the client's direct light over it. Storms use the same light params, so they get the same fog; the
+death slot doesn't, so the ghost view is unchanged. Twilight Grove (light 41) and the Stranglethorn lights that reach
+south Duskwood keep their own colours.
+
+It also appends unused grading curves, one by default. A launcher that compares client files by size treats a same-size
+edit as up to date, so players who already have the file would never receive it. Each version that ships needs a size
+no earlier version had: raise `--unused-curves` by one whenever the tool's constants change.
 
 The converter keeps the fog rows the Classic client selects (flag bit 3) at their layer index (0–2). At run
 time the DLL blends the Classic lights around the camera: spheres at full weight inside the falloff start and

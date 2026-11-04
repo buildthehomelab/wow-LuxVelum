@@ -65,7 +65,7 @@ def lights_using(data, first_light, light_count, params_id):
     return users
 
 
-def darken_duskwood(source):
+def darken_duskwood(source, unused_curves):
     data = bytearray(source)
     header = list(struct.unpack_from(HEADER, data, 0))
     magic, version, lights, params, keys, layers, zones, points, curves = header
@@ -94,19 +94,21 @@ def darken_duskwood(source):
             for layer_index in SCENE_LAYERS:
                 if layer_index < layer_count:
                     darken_layer(data, first_layer + (layer_start + layer_index) * LAYER_SIZE, layer_index)
-    header[-1] = curves + 1
+    header[-1] = curves + unused_curves
     struct.pack_into(HEADER, data, 0, *header)
-    return bytes(data) + bytes(GRADING_CURVE_SIZE)
+    return bytes(data) + bytes(GRADING_CURVE_SIZE * unused_curves)
 
 
 def main():
     parser = argparse.ArgumentParser(description=DESCRIPTION)
     parser.add_argument("source")
     parser.add_argument("output")
+    parser.add_argument("--unused-curves", type=int, default=1, choices=range(1, 256), metavar="1-255",
+                        help="unused grading curves to append; each one adds %d bytes" % GRADING_CURVE_SIZE)
     args = parser.parse_args()
     with open(args.source, "rb") as handle:
         source = handle.read()
-    result = darken_duskwood(source)
+    result = darken_duskwood(source, args.unused_curves)
     with open(args.output, "wb") as handle:
         handle.write(result)
     print("%s: %d bytes" % (args.output, len(result)))

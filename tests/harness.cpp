@@ -994,6 +994,13 @@ void CheckAuthoredFogFollowsClientDirectLight(const FogData& data)
     Check(duskwoodResolved && std::fabs(duskwood.directLightMatch - 0.342745f) < 0.00001f,
           "clear Darkshire fog follows the client's dimmer direct light in linear colour space");
 
+    AuthoredFog duskwoodNoon = {};
+    bool duskwoodNoonResolved =
+        data.Resolve(kEasternKingdoms, clearDuskwood.camPos, kNoon, clearDuskwood.lightParams, duskwoodNoon);
+    Check(duskwoodNoonResolved && duskwoodNoon.layerCount == 3 && duskwoodNoon.layers[0].emissive[0] > 0.1f &&
+              duskwoodNoon.layers[0].emissive[2] < 0.4f,
+          "Darkshire's noon fog is a dim grey-green, not Forever's cyan");
+
     AuthoredFog missingDirectLight = duskwoodFog;
     missingDirectLight.hasClassicDirectLight = false;
     const FogParams uncalibrated = BuildFogParams(clearDuskwood, cfg, &missingDirectLight);

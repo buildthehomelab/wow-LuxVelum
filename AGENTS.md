@@ -57,7 +57,7 @@ reverse-engineering evidence.
 - `tests/harness.cpp` — the offline D3D9 harness; `--scene harbour` renders a logged in-game frame, `--scene ripples`
   units wading through the basin. `tests/shaders/` holds a copy of the client's M2 fog shader for the transparent fog
   checks.
-- `tools/` — the Classic fog and Forever water data converters and the comment check.
+- `tools/` — the Classic fog and Forever water data converters, the Duskwood fog edit and the comment check.
 
 ## Maintaining guidance
 
