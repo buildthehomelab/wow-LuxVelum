@@ -36,7 +36,7 @@ reverse-engineering evidence.
 ## Repository layout
 
 - `proxy/` — the optional `version.dll` loader that forwards to the system copy.
-- `src/` — `d3d9_wrap` (device wrapper, INTZ depth), `msaa_depth` (multisampled depth copy into INTZ: NVAPI, RESZ,
+- `src/` — `weather_director` (weather to look), `water_rain` (rain rings), `d3d9_wrap` (device wrapper, INTZ depth), `msaa_depth` (multisampled depth copy into INTZ: NVAPI, RESZ,
   self-test), `hooks` (call-site thunks), `engine` (client addresses and frame inputs), `engine_actors` (unit walk
   for water contacts), `engine_lights` (point-light table walk, view-frustum test, ranked candidate pool),
   `local_light_stabiliser` (eight slots with hysteresis, fades and holds across captures), `client_code` (client
