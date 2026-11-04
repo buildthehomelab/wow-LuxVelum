@@ -1,5 +1,6 @@
 #include "engine.h"
 
+#include "config.h"
 #include "local_light_stabiliser.h"
 
 #include "log.h"
