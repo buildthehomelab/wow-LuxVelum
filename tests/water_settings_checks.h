@@ -98,7 +98,8 @@ void CheckShippedWaterDefaults(const std::wstring& shippedIni)
     const char* const shippedLines[] = {"Water=1",          "WaterQuality=2",     "WaterWaves=1.0",
                                         "WaterWind=2.0",    "WaterFoam=1.0",      "WaterReflections=1.0",
                                         "WaterSpecular=1.0", "WaterClarity=1.0", "WaterZoneColors=0.5",
-                                        "WaterRipples=0.5", "WaterFlow=1.0", "WaterClientSplashes=0", "WaterDebugView=0"};
+                                        "WaterRipples=0.5", "WaterFlow=1.0", "WaterClientSplashes=0",
+                                        "WaterDebugView=0"};
     int found = 0;
     for (const char* shipped : shippedLines)
         found += std::count(lines.begin(), lines.end(), std::string(shipped)) == 1 ? 1 : 0;
@@ -129,6 +130,7 @@ void CheckWaterSettingsSave(const std::wstring& outDir, const std::wstring& ship
     edited.waterWaves = 1.5f;
     edited.waterFoam = 0.25f;
     edited.waterRipples = 1.5f;
+    edited.waterFlow = 1.5f;
     edited.waterClientSplashes = true;
     edited.waterDebugView = 6;
     store.Apply(edited);
@@ -161,7 +163,7 @@ void CheckWaterSettingsSave(const std::wstring& outDir, const std::wstring& ship
         return std::find(saved.begin(), saved.end(), std::string(line)) != saved.end();
     };
     Check(has("Water=0") && has("WaterQuality=3") && has("WaterWaves=1.5") && has("WaterFoam=0.25") &&
-              has("WaterRipples=1.5") && has("WaterClientSplashes=1") && has("WaterDebugView=6") &&
+              has("WaterRipples=1.5") && has("WaterFlow=1.5") && has("WaterClientSplashes=1") && has("WaterDebugView=6") &&
               has("WaterWind=2.0"),
           "the saved water lines hold the edited values and the untouched ones keep their text");
 }
@@ -188,7 +190,8 @@ void CheckWaterSettingClamps(const std::wstring& outDir, const std::wstring& shi
                 c.waterClarity, c.waterZoneColors, c.waterRipples, c.waterDebugView);
     Check(c.water && c.waterQuality == 3 && c.waterWaves == 0.0f && c.waterWind == 10.0f && c.waterFoam == 2.0f &&
               c.waterReflections == 0.0f && c.waterSpecular == 4.0f && c.waterClarity == 0.25f &&
-              c.waterZoneColors == 1.0f && c.waterRipples == 2.0f && c.waterFlow == 2.0f && c.waterDebugView == 7 && c.waterClientSplashes,
+              c.waterZoneColors == 1.0f && c.waterRipples == 2.0f && c.waterFlow == 2.0f && c.waterDebugView == 7 &&
+              c.waterClientSplashes,
           "out-of-range water keys in the INI are clamped to their ranges");
 
     WritePrivateProfileStringW(L"LuxVelum", L"WaterWaves", L"nan", clampedIni.c_str());
