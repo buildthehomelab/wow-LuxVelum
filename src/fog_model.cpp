@@ -435,6 +435,8 @@ FogParams BuildFogParams(const FrameInputs& in, const Config& settings, const Au
         DerivedLayers(in, cfg, p, elevationFadedScatter, fogDistance, fogColor, p.layers);
         DistanceLayer(in, cfg, p, elevationFadedScatter, fogColor, distanceFog);
     }
+    for (int i = 0; i < kSceneLayers; ++i)
+        p.layers[i].skyFalloff = weather.skyFogThinning;
     for (LayerNoise& noise : p.noise)
         for (float(&velocity)[3] : noise.velocity)
             for (float& axis : velocity)

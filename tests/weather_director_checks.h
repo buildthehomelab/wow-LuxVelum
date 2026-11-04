@@ -560,6 +560,21 @@ void CheckRainRings()
     Check(drops.Take(50.0f, centre, 20.0f, out, 2) == 2, "drops never exceed the free disturbances");
 }
 
+void CheckCloudsThroughFog()
+{
+    WeatherTuning tuning = TestTuning();
+    tuning.cloudsThroughFog = 4.0f;
+    WeatherReading clear;
+    WeatherDirector noOvercast;
+    Check(noOvercast.Step(clear, tuning, kStart).skyFogThinning == 0.0f, "with no overcast the sky's fog stays");
+    clear.overcastWeight = 0.5f;
+    WeatherDirector half;
+    Check(Near(half.Step(clear, tuning, kStart).skyFogThinning, 2.0f), "it thins with the overcast's weight");
+    tuning.cloudsThroughFog = 0.0f;
+    WeatherDirector off;
+    Check(off.Step(clear, tuning, kStart).skyFogThinning == 0.0f, "it can be turned off");
+}
+
 void Run()
 {
     CheckClientFields();
@@ -579,5 +594,6 @@ void Run()
     CheckLightning();
     CheckDawnMist();
     CheckRainRings();
+    CheckCloudsThroughFog();
 }
 }

@@ -63,6 +63,7 @@ struct WeatherTuning
     float rainRings = 0.0f;
     float lightning = 0.0f;
     float dawnMist = 0.0f;
+    float cloudsThroughFog = 0.0f;
     float tintColors[kWeatherKinds][3] = {};
 };
 
@@ -86,6 +87,7 @@ struct WeatherLook
     float wetness = 0.0f;
     float rainDropsPerSecond = 0.0f;
     float flash = 0.0f;
+    float skyFogThinning = 0.0f;
     float strikeSeed = 0.0f;
     bool strikeAsked = false;
     int thunderClip = kNoThunderClip;

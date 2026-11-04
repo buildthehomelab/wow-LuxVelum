@@ -300,6 +300,12 @@ a heavy overcast, and shift with the camera as a deck 1,500 yards up.
 cloud density (`0x7F056A`) if they ever take that over per zone. None of the look is confirmed in game; the checks cover
 the overcast reading, the cover, the colours' order and the field.
 
+**Clouds through fog.** The fog pass draws over these clouds and treats them as sky, and a storm's own fog is thick enough
+to hide them: by a rough calculation about 2% of the Barrens' sky shows at 30 degrees up under thunder, against 42% in clear
+weather. So under an overcast each scene layer gets a `skyFalloff` of `CloudsThroughFog` times the overcast weight, the same
+`exp(-upward * falloff)` the distance fog already uses on sky pixels. It leaves terrain and the horizon alone. `.weather sky`
+brings an overcast without weather, so it shows clouds with no storm fog; test with `.weather start` to see both.
+
 **Lightning bolts.** Three strikes in four draw a bolt; the rest only light up the clouds. A strike's seed picks the
 shape: a channel jagged by midpoint displacement, from 16 to 32 degrees up to below the horizon, fading out at its foot,
 with two to six branches that fade to their tips. Most land within 45 degrees of where the camera looks when they
@@ -876,6 +882,7 @@ its comments describe every key. In the game, `Ctrl+F7` opens the same settings 
 | `ClassicNoise` | 1 | The modern client's authored noise on the Classic layers that carry it (mostly storms); 0 = off |
 | `WeatherEffects` | 1 | Weather changes the fog, sun, god rays and water; 0 = the clear look in all weather |
 | `StormClouds` | 1 | Clouds that grow and darken with the overcast; 0 = none from here |
+| `CloudsThroughFog` | 4.0 | Under an overcast, how far the fog thins toward the sky; 0 = the same fog everywhere |
 | `CloudPreviewWeight`, `CloudPreviewStorm` | 0, 0 | For looking only: draw this overcast weight, and how far it is thunder; 0 = follow the game |
 | `CloudFairCover` | 0 | Share of the sky always covered, 0..1 |
 | `CloudDarkness`, `CloudOpacity`, `CloudWind` | 1.0, 1.0, 1.0 | How dark the thick parts get, how solid the clouds are, how fast they move |
