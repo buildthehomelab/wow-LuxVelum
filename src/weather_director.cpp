@@ -1,6 +1,7 @@
 #include "weather_director.h"
 
 #include <algorithm>
+#include <cctype>
 #include <cmath>
 
 namespace
@@ -20,6 +21,9 @@ constexpr double kEnvelopeEndSeconds = 1.0;
 constexpr float kDawnStart = 4.5f / 24.0f;
 constexpr float kDawnPeak = 6.5f / 24.0f;
 constexpr float kDawnEnd = 9.0f / 24.0f;
+constexpr float kWetFullWithin = 150.0f;
+constexpr float kWetNoneBeyond = 500.0f;
+constexpr double kFlashRiseSeconds = 0.03;
 
 float Mix(float from, float to, float amount)
 {
@@ -47,10 +51,39 @@ float SmoothFall(float value, float fullBelow, float noneAbove)
 }
 }
 
-int WeatherKindOf(int32_t weatherType, float intensity)
+int32_t LiveClientWeatherType(int32_t requested, bool rainEffect, bool snowEffect, bool sandEffect)
+{
+    if (requested > kClientWeatherNone)
+        return requested;
+    if (rainEffect)
+        return kClientWeatherRain;
+    if (snowEffect)
+        return kClientWeatherSnow;
+    if (sandEffect)
+        return kClientWeatherSand;
+    return kClientWeatherNone;
+}
+
+bool ClientWeatherIsAsh(int32_t type, float transition, const char* texture)
+{
+    if (type == kClientWeatherSand)
+        return transition == 0.0f;
+    if (type != kClientWeatherSnow || !texture)
+        return false;
+    for (const char* c = texture; c[0] && c[1] && c[2]; ++c)
+        if (std::tolower(static_cast<unsigned char>(c[0])) == 'a' &&
+            std::tolower(static_cast<unsigned char>(c[1])) == 's' &&
+            std::tolower(static_cast<unsigned char>(c[2])) == 'h')
+            return true;
+    return false;
+}
+
+int WeatherKindOf(int32_t weatherType, float intensity, bool ash)
 {
     if (!std::isfinite(intensity) || intensity <= 0.0f)
         return kNoWeatherKind;
+    if (ash && weatherType > kClientWeatherNone)
+        return kWeatherAsh;
     switch (weatherType)
     {
     case kClientWeatherNone:
@@ -68,7 +101,7 @@ int WeatherKindOf(int32_t weatherType, float intensity)
 
 void WeatherDirector::Advance(const WeatherReading& reading, const WeatherTuning& tuning, double elapsed)
 {
-    const int current = WeatherKindOf(reading.type, reading.intensity);
+    const int current = WeatherKindOf(reading.type, reading.intensity, reading.ash);
     const float target = current == kNoWeatherKind ? 0.0f : std::min(reading.intensity, 1.0f);
     for (int kind = 0; kind < kWeatherKinds; ++kind)
     {
@@ -78,9 +111,30 @@ void WeatherDirector::Advance(const WeatherReading& reading, const WeatherTuning
     }
     if (elapsed < 0.0)
         return;
+    if (m_hasWetPlace && reading.mapId != m_wetMapId)
+    {
+        m_wetness = 0.0f;
+        m_hasWetPlace = false;
+    }
     const float wetting = std::max(m_blend[kWeatherRain], m_blend[kWeatherSnow]);
+    if (wetting > 0.0f)
+    {
+        m_hasWetPlace = true;
+        m_wetMapId = reading.mapId;
+        m_wetPosition[0] = reading.position[0];
+        m_wetPosition[1] = reading.position[1];
+    }
     const float seconds = wetting > m_wetness ? tuning.wetSeconds : tuning.dryingSeconds;
     m_wetness = EasedToward(m_wetness, wetting, elapsed, seconds);
+}
+
+float WeatherDirector::LocalWetness(const WeatherReading& reading) const
+{
+    if (!m_hasWetPlace)
+        return 0.0f;
+    const float dx = reading.position[0] - m_wetPosition[0];
+    const float dy = reading.position[1] - m_wetPosition[1];
+    return m_wetness * SmoothFall(std::sqrt(dx * dx + dy * dy), kWetFullWithin, kWetNoneBeyond);
 }
 
 float WeatherDirector::NextUnit()
@@ -147,16 +201,17 @@ WeatherLook WeatherDirector::Step(const WeatherReading& reading, const WeatherTu
             look.tintColor[channel] = mixed / totalBlend;
         }
 
-    const float clearing = m_wetness * (1.0f - cover);
+    const float wetHere = LocalWetness(reading);
+    const float clearing = wetHere * (1.0f - cover);
     const float mist = clearing * std::max(tuning.afterRainMist, 0.0f) +
                        (1.0f - cover) * WeatherDawnWeight(reading.dayFraction) * std::max(tuning.dawnMist, 0.0f);
-    look.wetness = m_wetness;
+    look.wetness = wetHere;
     look.density *= 1.0f + mist;
     look.variation *= 1.0f + mist;
     look.rainDropsPerSecond = m_blend[kWeatherRain] * kFullRainDropsPerSecond * std::max(tuning.rainRings, 0.0f);
     look.flash = Flash(tuning, nowSeconds);
     look.lowSunRays = std::max(tuning.lowSunRays, 0.0f) * (1.0f - cover);
-    look.clearingRays = std::max(tuning.clearingRays, 0.0f) * clearing;
+    look.clearingRays = std::max(tuning.clearingRays, 0.0f) * clearing * clearing;
     return look;
 }
 
@@ -186,7 +241,8 @@ float WeatherLightningEnvelope(double sinceStrike)
 {
     if (sinceStrike < 0.0 || sinceStrike > kEnvelopeEndSeconds)
         return 0.0f;
-    float envelope = static_cast<float>(std::exp(-sinceStrike / kFirstStrokeSeconds));
+    float envelope = static_cast<float>(std::min(sinceStrike / kFlashRiseSeconds, 1.0) *
+                                        std::exp(-sinceStrike / kFirstStrokeSeconds));
     if (sinceStrike > kSecondStrokeDelay)
         envelope += kSecondStrokeShare *
                     static_cast<float>(std::exp(-(sinceStrike - kSecondStrokeDelay) / kSecondStrokeSeconds));

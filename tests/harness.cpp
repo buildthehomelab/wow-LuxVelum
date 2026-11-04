@@ -1008,6 +1008,15 @@ void CheckAuthoredFogFollowsClientDirectLight(const FogData& data)
     const FogParams struckLook = BuildFogParams(struck, cfg, &duskwoodFog);
     Check(struckLook.layers[0].emissive[2] > BuildFogParams(clearDuskwood, cfg, &duskwoodFog).layers[0].emissive[2],
           "lightning brightens the fog");
+    AuthoredFog noisyFog = duskwoodFog;
+    noisyFog.layers[0].noise.presence = 1.0f;
+    noisyFog.layers[0].noise.octaveShare[0] = 1.0f;
+    noisyFog.layers[0].noise.tileYards[0] = 100.0f;
+    noisyFog.layers[0].noise.velocity[0][0] = 2.0f;
+    FrameInputs drifting = clearDuskwood;
+    drifting.weather.drift = 3.0f;
+    Check(Near(BuildFogParams(drifting, cfg, &noisyFog).noise[0].velocity[0][0], 6.0f),
+          "weather drives the area's own drifting fog banks too");
     FogParams clearLook = BuildFogParams(clearDuskwood, cfg, &duskwoodFog);
     FrameInputs rainy = clearDuskwood;
     rainy.weather.sun = 0.5f;
@@ -1026,10 +1035,8 @@ void CheckAuthoredFogFollowsClientDirectLight(const FogData& data)
     const FogParams tintedLook = BuildFogParams(tinted, cfg, &duskwoodFog);
     Check(tintedLook.layers[0].emissive[0] > 0.0f && tintedLook.layers[0].emissive[1] == 0.0f,
           "weather tints the fog toward its colour");
-    Check(std::memcmp(clearLook.layers, BuildFogParams(clearDuskwood, cfg, &duskwoodFog).layers,
-                      sizeof(clearLook.layers)) == 0 &&
-              clearLook.weather.exposure == 1.0f,
-          "clear weather leaves the fog's layers alone");
+    Check(clearLook.weather.exposure == 1.0f && clearLook.weather.tint == 0.0f && clearLook.weather.flash == 0.0f,
+          "clear weather carries a neutral look");
 
     AuthoredFog missingDirectLight = duskwoodFog;
     missingDirectLight.hasClassicDirectLight = false;

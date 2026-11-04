@@ -97,8 +97,19 @@ const FloatSetting kFloatSettings[] = {
     {"WeatherLowSunRays", &Config::weatherLowSunRays, 0.0f, 4.0f},
     {"WeatherClearingRays", &Config::weatherClearingRays, 0.0f, 4.0f},
     {"WeatherRainRings", &Config::weatherRainRings, 0.0f, 3.0f},
-    {"WeatherLightning", &Config::weatherLightning, 0.0f, 2.0f},
+    {"WeatherLightning", &Config::weatherLightning, 0.0f, 1.5f},
     {"WeatherDawnMist", &Config::weatherDawnMist, 0.0f, 2.0f},
+    {"AshSun", &Config::ashSun, 0.0f, 2.0f},
+    {"AshRays", &Config::ashRays, 0.0f, 2.0f},
+    {"AshExposure", &Config::ashExposure, 0.0f, 2.0f},
+    {"AshDensity", &Config::ashDensity, 0.0f, 4.0f},
+    {"AshDrift", &Config::ashDrift, 0.0f, 6.0f},
+    {"AshVariation", &Config::ashVariation, 0.0f, 4.0f},
+    {"AshTint", &Config::ashTint, 0.0f, 1.0f},
+    {"AshWaves", &Config::ashWaves, 0.0f, 2.5f},
+    {"AshWind", &Config::ashWind, 0.0f, 4.0f},
+    {"AshFoam", &Config::ashFoam, 0.0f, 4.0f},
+    {"AshGlint", &Config::ashGlint, 0.0f, 2.0f},
     {"RainSun", &Config::rainSun, 0.0f, 2.0f},
     {"RainRays", &Config::rainRays, 0.0f, 2.0f},
     {"RainExposure", &Config::rainExposure, 0.0f, 2.0f},
@@ -465,6 +476,8 @@ WeatherTuning WeatherTuningFrom(const Config& c)
                                 c.sandTint, c.sandWaves, c.sandWind,    c.sandFoam,    c.sandGlint};
     t.profiles[kWeatherFog] = {c.fogSun,  c.fogRays, c.fogExposure, c.fogDensity, c.fogDrift, c.fogVariation,
                                c.fogTint, c.fogWaves, c.fogWind,    c.fogFoam,    c.fogGlint};
+    t.profiles[kWeatherAsh] = {c.ashSun,  c.ashRays, c.ashExposure, c.ashDensity, c.ashDrift, c.ashVariation,
+                               c.ashTint, c.ashWaves, c.ashWind,    c.ashFoam,    c.ashGlint};
     t.strength = c.weatherStrength;
     t.easeSeconds = c.weatherEaseSeconds;
     t.dryingSeconds = c.weatherDryingSeconds;
@@ -475,7 +488,8 @@ WeatherTuning WeatherTuningFrom(const Config& c)
     t.lightning = c.weatherLightning;
     t.dawnMist = c.weatherDawnMist;
     static const float kTintColors[kWeatherKinds][3] = {
-        {0.70f, 0.75f, 0.80f}, {0.85f, 0.92f, 1.00f}, {0.78f, 0.62f, 0.40f}, {0.78f, 0.80f, 0.82f}};
+        {0.70f, 0.75f, 0.80f}, {0.85f, 0.92f, 1.00f}, {0.78f, 0.62f, 0.40f}, {0.78f, 0.80f, 0.82f},
+        {0.45f, 0.42f, 0.40f}};
     std::memcpy(t.tintColors, kTintColors, sizeof(kTintColors));
     return t;
 }

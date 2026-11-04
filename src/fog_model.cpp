@@ -6,7 +6,9 @@
 
 namespace
 {
-constexpr float kLightningFlashColor[3] = {0.55f, 0.60f, 0.75f};
+constexpr float kLightningFlashColor[3] = {0.75f, 0.82f, 1.0f};
+constexpr float kLightningFlashFloor = 0.10f;
+constexpr float kLightningFlashPerEmissive = 1.5f;
 constexpr float kHazeDensity = 0.00035f;
 constexpr float kHazeG = 0.75f;
 constexpr float kHazeIsotropic = 0.3f;
@@ -302,7 +304,7 @@ float InteriorWeight(const FrameInputs& in, const Config& cfg)
 
 void TintTowardWeather(float* rgb, const float* tint, float amount)
 {
-    const float luminance = 0.2126f * rgb[0] + 0.7152f * rgb[1] + 0.0722f * rgb[2];
+    const float luminance = Luminance(rgb);
     for (int channel = 0; channel < 3; ++channel)
         rgb[channel] += (luminance * tint[channel] - rgb[channel]) * amount;
 }
@@ -330,9 +332,13 @@ void AddLightningFlash(float flash, FogParams& fog)
     float light[3] = {kLightningFlashColor[0], kLightningFlashColor[1], kLightningFlashColor[2]};
     Encode(light, fog.linear);
     for (FogLayer& layer : fog.layers)
-        if (layer.density > 0.0f)
-            for (int channel = 0; channel < 3; ++channel)
-                layer.emissive[channel] += light[channel] * flash;
+    {
+        if (layer.density <= 0.0f)
+            continue;
+        const float gain = kLightningFlashFloor + kLightningFlashPerEmissive * Luminance(layer.emissive);
+        for (int channel = 0; channel < 3; ++channel)
+            layer.emissive[channel] += light[channel] * flash * gain;
+    }
 }
 
 void ApplyInteriorFog(float weight, const Config& cfg, FogParams& fog)
@@ -422,6 +428,10 @@ FogParams BuildFogParams(const FrameInputs& in, const Config& settings, const Au
         DerivedLayers(in, cfg, p, elevationFadedScatter, fogDistance, fogColor, p.layers);
         DistanceLayer(in, cfg, p, elevationFadedScatter, fogColor, distanceFog);
     }
+    for (LayerNoise& noise : p.noise)
+        for (float(&velocity)[3] : noise.velocity)
+            for (float& axis : velocity)
+                axis *= weather.drift;
     ApplyWeatherTint(weather, p);
     AddLightningFlash(weather.flash, p);
     ApplyInteriorFog(interiorWeight, cfg, p);

@@ -225,37 +225,37 @@ struct WeatherSlider
 };
 
 const WeatherSlider kWeatherSliders[] = {
-    {"Sun", {&Config::rainSun, &Config::snowSun, &Config::sandSun, &Config::fogSun}, 2.0f,
+    {"Sun", {&Config::rainSun, &Config::snowSun, &Config::sandSun, &Config::fogSun, &Config::ashSun}, 2.0f,
      "Sun and moon scattered into the fog; lower hides the sun behind the weather"},
-    {"Rays", {&Config::rainRays, &Config::snowRays, &Config::sandRays, &Config::fogRays}, 2.0f,
+    {"Rays", {&Config::rainRays, &Config::snowRays, &Config::sandRays, &Config::fogRays, &Config::ashRays}, 2.0f,
      "How much of the god rays stay in this weather"},
-    {"Exposure", {&Config::rainExposure, &Config::snowExposure, &Config::sandExposure, &Config::fogExposure}, 2.0f,
+    {"Exposure", {&Config::rainExposure, &Config::snowExposure, &Config::sandExposure, &Config::fogExposure, &Config::ashExposure}, 2.0f,
      "Brightness of the fog"},
-    {"Thickness", {&Config::rainDensity, &Config::snowDensity, &Config::sandDensity, &Config::fogDensity}, 4.0f,
+    {"Thickness", {&Config::rainDensity, &Config::snowDensity, &Config::sandDensity, &Config::fogDensity, &Config::ashDensity}, 4.0f,
      "How thick the fog gets"},
-    {"Drift", {&Config::rainDrift, &Config::snowDrift, &Config::sandDrift, &Config::fogDrift}, 6.0f,
+    {"Drift", {&Config::rainDrift, &Config::snowDrift, &Config::sandDrift, &Config::fogDrift, &Config::ashDrift}, 6.0f,
      "How fast the mist patches move"},
-    {"Patchiness", {&Config::rainVariation, &Config::snowVariation, &Config::sandVariation, &Config::fogVariation},
-     4.0f, "How uneven the mist looks"},
-    {"Tint", {&Config::rainTint, &Config::snowTint, &Config::sandTint, &Config::fogTint}, 1.0f,
+    {"Patchiness", {&Config::rainVariation, &Config::snowVariation, &Config::sandVariation, &Config::fogVariation, &Config::ashVariation},
+     4.0f, "How uneven the mist looks, where the area's storm fog has no drifting banks of its own"},
+    {"Tint", {&Config::rainTint, &Config::snowTint, &Config::sandTint, &Config::fogTint, &Config::ashTint}, 1.0f,
      "How far the fog turns to this weather's colour instead of the area's"},
-    {"Waves", {&Config::rainWaves, &Config::snowWaves, &Config::sandWaves, &Config::fogWaves}, 2.5f,
+    {"Waves", {&Config::rainWaves, &Config::snowWaves, &Config::sandWaves, &Config::fogWaves, &Config::ashWaves}, 2.5f,
      "Wave height on modern water"},
-    {"Wind", {&Config::rainWind, &Config::snowWind, &Config::sandWind, &Config::fogWind}, 4.0f,
+    {"Wind", {&Config::rainWind, &Config::snowWind, &Config::sandWind, &Config::fogWind, &Config::ashWind}, 4.0f,
      "Wind on modern water; stronger makes longer, rougher waves"},
-    {"Foam", {&Config::rainFoam, &Config::snowFoam, &Config::sandFoam, &Config::fogFoam}, 4.0f,
+    {"Foam", {&Config::rainFoam, &Config::snowFoam, &Config::sandFoam, &Config::fogFoam, &Config::ashFoam}, 4.0f,
      "Foam on wave crests and shores"},
-    {"Glint", {&Config::rainGlint, &Config::snowGlint, &Config::sandGlint, &Config::fogGlint}, 2.0f,
+    {"Glint", {&Config::rainGlint, &Config::snowGlint, &Config::sandGlint, &Config::fogGlint, &Config::ashGlint}, 2.0f,
      "Sun and moon highlight on water"},
 };
 
-const char* const kWeatherKindNames[kWeatherKinds] = {"Rain", "Snow", "Sandstorm", "Fog"};
+const char* const kWeatherKindNames[kWeatherKinds] = {"Rain", "Snow", "Sandstorm", "Fog", "Ash"};
 
 void DrawWeatherNow()
 {
     const WeatherReading reading = engine::LastWeatherReading();
     const WeatherLook look = engine::LastWeatherLook();
-    const int kind = WeatherKindOf(reading.type, reading.intensity);
+    const int kind = WeatherKindOf(reading.type, reading.intensity, reading.ash);
     ImGui::Text("Now: %s, intensity %.2f", kind == kNoWeatherKind ? "clear" : kWeatherKindNames[kind],
                 reading.intensity);
     ImGui::Text("Storm fog %.2f, sun %.2f, thickness %.2f, wet ground %.2f", look.stormBlend, look.sun, look.density,
@@ -300,8 +300,9 @@ bool DrawWeather(Config& c)
                       "God rays breaking through as a front passes, while the ground is still wet");
     changed |= Slider("Rain rings", c.weatherRainRings, 0.0f, 3.0f, "%.2f",
                       "Rain drops making rings on modern water around you; needs water ripples on. 0 = none");
-    changed |= Slider("Lightning", c.weatherLightning, 0.0f, 2.0f, "%.2f",
-                      "Brief flashes lighting the fog in heavy rain, every 8 to 35 seconds. 0 = none");
+    changed |= Slider("Lightning", c.weatherLightning, 0.0f, 1.5f, "%.2f",
+                      "Brief flashes lighting the fog in heavy rain, every 8 to 35 seconds. Can be uncomfortable for "
+                      "people sensitive to flashing light. 0 = none");
     changed |= Slider("Dawn mist", c.weatherDawnMist, 0.0f, 2.0f, "%.2f",
                       "Extra mist around sunrise in clear weather. 0 = none");
     for (int kind = 0; kind < kWeatherKinds; ++kind)

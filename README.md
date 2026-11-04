@@ -236,18 +236,26 @@ edit as up to date, so players who already have the file would never receive it.
 no earlier version had: raise `--unused-curves` by one whenever the tool's constants change.
 
 **Weather.** The client never fills its own storm weight: `0xD38B88` is `0xD38B4C` times a constant (`0x7F3978`), and
-the only write to `0xD38B4C` is a zero at start-up (`0x7F2854`). So `WeatherDirector` takes it from the weather object
-at `[0xCD7544]`, which `SMSG_WEATHER` sets through `0x7846A0`: `+0x20` holds the type from `Weather.dbc`, and `+0x00` the
-latest intensity. The `+0x08` value the client ramps each frame (`0x784850`) isn't used, because it lags a change of type
-and clear weather right after rain would read as fog. `Weather.dbc` gives fog (state 1) type 0, so type 0 with an
-intensity of at least 0.27 counts as fog: below that a server sends clear skies. Sandstorms there are white, so the tint
-colours are the DLL's own. Each kind eases on its own, so rain turning to snow fades across. They go to the frame in
-`FrameInputs::weather`, not through `Config`, because a changed setting resets the temporal history. `0x7846A0` and
-`0x784850` are read from the code, and how any of this looks isn't confirmed in game.
+the only write to `0xD38B4C` is a zero at start-up (`0x7F2854`). So `WeatherDirector` takes it from the weather object at
+`[0xCD7544]`, which `SMSG_WEATHER` sets through `0x7846A0`. `+0x00` is the latest intensity. `+0x20` is only a request: the
+per-frame update `0x78D170` writes -1 there once it has built the effect (`0x78D49B`), so the live type comes from the
+effect pointers at `+0x13C` (rain), `+0x140` (snow) and `+0x144` (sand), as `0x783B60` reads them. The `+0x08` value the
+client ramps each frame (`0x784850`) isn't used, because it lags a change of type, and clear weather right after rain
+would read as fog.
+
+`Weather.dbc` gives fog (state 1) no effect type, so type 0 with an intensity of at least 0.27 counts as fog: below that a
+server sends clear skies, and a clear sky sent with a higher grade reads as fog. Sandstorms there are white, so the tint
+colours are the DLL's own. Ash is told apart two ways: a snow-type row whose texture at `+0x38` names ash, and a sand-type
+row whose transition at `+0x30` is 0 (the ones the table calls black snow). Each kind eases on its own, so rain turning to
+snow fades across. The look goes to the frame in `FrameInputs::weather`, not through `Config`, because a changed setting
+resets the temporal history. Wet ground belongs to the place: it fades 150 to 500 yards from where the rain fell, and a
+map change dries it. With `ForeverGlow` or `ColorGrading` on, the storm slot's glow and grading now apply too. All of the
+client reads come from the code, and how any of this looks isn't confirmed in game.
 
 Rain rings are ordinary ripple disturbances at random points around the camera, at most 6 per 30 Hz step, so they share
 the ripple pass's cost and its limit of 48. Lightning is a timer in the DLL, not the client's own strokes, so a flash
-need not match a thunder sound.
+need not match a thunder sound. Its brightness follows the fog's, so a dark night gets a smaller jump than a fixed colour
+would give.
 
 The converter keeps the fog rows the Classic client selects (flag bit 3) at their layer index (0–2). At run
 time the DLL blends the Classic lights around the camera: spheres at full weight inside the falloff start and

@@ -6,6 +6,7 @@ constexpr int32_t kClientWeatherNone = 0;
 constexpr int32_t kClientWeatherRain = 1;
 constexpr int32_t kClientWeatherSnow = 2;
 constexpr int32_t kClientWeatherSand = 3;
+constexpr int32_t kClientWeatherNoRequest = -1;
 constexpr float kClientFogMinimumIntensity = 0.27f;
 
 enum WeatherKind
@@ -14,6 +15,7 @@ enum WeatherKind
     kWeatherSnow,
     kWeatherSand,
     kWeatherFog,
+    kWeatherAsh,
     kWeatherKinds
 };
 constexpr int kNoWeatherKind = -1;
@@ -22,7 +24,10 @@ struct WeatherReading
 {
     int32_t type = kClientWeatherNone;
     float intensity = 0.0f;
+    bool ash = false;
     float dayFraction = 0.5f;
+    int mapId = 0;
+    float position[2] = {};
 };
 
 struct WeatherProfile
@@ -78,7 +83,9 @@ struct WeatherLook
     float flash = 0.0f;
 };
 
-int WeatherKindOf(int32_t weatherType, float intensity);
+int32_t LiveClientWeatherType(int32_t requested, bool rainEffect, bool snowEffect, bool sandEffect);
+bool ClientWeatherIsAsh(int32_t type, float transition, const char* texture);
+int WeatherKindOf(int32_t weatherType, float intensity, bool ash);
 WeatherLook NeutralWeatherLook(const WeatherLook& look, float outdoorShare);
 float WeatherLightningEnvelope(double sinceStrike);
 float WeatherDawnWeight(float dayFraction);
@@ -92,6 +99,7 @@ public:
 
 private:
     void Advance(const WeatherReading& reading, const WeatherTuning& tuning, double elapsed);
+    float LocalWetness(const WeatherReading& reading) const;
     float Flash(const WeatherTuning& tuning, double nowSeconds);
     float NextUnit();
 
@@ -99,6 +107,9 @@ private:
     double m_lastSeconds = 0.0;
     float m_blend[kWeatherKinds] = {};
     float m_wetness = 0.0f;
+    bool m_hasWetPlace = false;
+    int m_wetMapId = 0;
+    float m_wetPosition[2] = {};
     double m_nextStrike = 0.0;
     double m_lastStrike = -1000.0;
     uint32_t m_random = 0x51F15EEDu;

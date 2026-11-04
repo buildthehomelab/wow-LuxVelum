@@ -72,7 +72,13 @@ constexpr uintptr_t kDayNightScreenEffectLightSlot = 0x00D38B58;
 constexpr uintptr_t kDayNightStormBlend = 0x00D38B88;
 constexpr uintptr_t kMapWeather = 0x00CD7544;
 constexpr uintptr_t kMapWeatherIntensity = 0x00;
-constexpr uintptr_t kMapWeatherType = 0x20;
+constexpr uintptr_t kMapWeatherRequestedType = 0x20;
+constexpr uintptr_t kMapWeatherTransition = 0x30;
+constexpr uintptr_t kMapWeatherTexture = 0x38;
+constexpr size_t kMapWeatherTextureBytes = 260;
+constexpr uintptr_t kMapWeatherRainEffect = 0x13C;
+constexpr uintptr_t kMapWeatherSnowEffect = 0x140;
+constexpr uintptr_t kMapWeatherSandEffect = 0x144;
 
 constexpr uintptr_t kLightSkyColors[kSkyColorCount] = {0x00D38BE0, 0x00D38BE4, 0x00D38BE8,
                                                        0x00D38BEC, 0x00D38BF0, 0x00D38BF4};
@@ -371,10 +377,22 @@ WeatherReading ReadClientWeather()
     const uintptr_t weather = Read<uintptr_t>(kMapWeather);
     if (weather)
     {
-        reading.type = Read<int32_t>(weather + kMapWeatherType);
+        reading.type = LiveClientWeatherType(Read<int32_t>(weather + kMapWeatherRequestedType),
+                                             Read<uintptr_t>(weather + kMapWeatherRainEffect) != 0,
+                                             Read<uintptr_t>(weather + kMapWeatherSnowEffect) != 0,
+                                             Read<uintptr_t>(weather + kMapWeatherSandEffect) != 0);
         reading.intensity = Read<float>(weather + kMapWeatherIntensity);
+        char texture[kMapWeatherTextureBytes];
+        std::memcpy(texture, reinterpret_cast<const void*>(weather + kMapWeatherTexture), sizeof(texture));
+        texture[sizeof(texture) - 1] = '\0';
+        reading.ash = ClientWeatherIsAsh(reading.type, Read<float>(weather + kMapWeatherTransition), texture);
     }
     reading.dayFraction = Read<float>(kDayFraction);
+    reading.mapId = Read<int32_t>(kCurrentMap);
+    float camera[3];
+    ReadFloats(kCameraPosition, camera, 3);
+    reading.position[0] = camera[0];
+    reading.position[1] = camera[1];
     return reading;
 }
 
@@ -388,9 +406,10 @@ void StepWeatherLook(const Config& cfg)
         return;
     }
     const WeatherReading reading = ReadClientWeather();
-    if (WeatherKindOf(reading.type, reading.intensity) !=
-        WeatherKindOf(g_weatherReading.type, g_weatherReading.intensity))
-        VF_LOG_INFO("weather: client type %d, intensity %.2f", reading.type, reading.intensity);
+    if (WeatherKindOf(reading.type, reading.intensity, reading.ash) !=
+        WeatherKindOf(g_weatherReading.type, g_weatherReading.intensity, g_weatherReading.ash))
+        VF_LOG_INFO("weather: client type %d%s, intensity %.2f", reading.type, reading.ash ? " (ash)" : "",
+                    reading.intensity);
     g_weatherReading = reading;
     g_weatherLook = director.Step(reading, WeatherTuningFrom(cfg), ClockSeconds());
 }
