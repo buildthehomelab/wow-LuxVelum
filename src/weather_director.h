@@ -103,7 +103,7 @@ public:
 private:
     void Advance(const WeatherReading& reading, const WeatherTuning& tuning, double elapsed);
     float LocalWetness(const WeatherReading& reading) const;
-    bool LightningWeather(const WeatherReading& reading) const;
+    bool LightningWeather(const WeatherReading& reading, double nowSeconds);
     float Flash(const WeatherReading& reading, const WeatherTuning& tuning, double nowSeconds);
     float NextUnit();
 
@@ -118,5 +118,6 @@ private:
     double m_nextStrike = 0.0;
     double m_lastStrike = -1000.0;
     float m_strikeSeed = 0.0f;
+    double m_lastAshSeconds = -1000.0;
     uint32_t m_random = 0x51F15EEDu;
 };

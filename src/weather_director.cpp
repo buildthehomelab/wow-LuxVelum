@@ -25,6 +25,7 @@ constexpr float kWetFullWithin = 150.0f;
 constexpr float kWetNoneBeyond = 500.0f;
 constexpr double kFlashRiseSeconds = 0.03;
 constexpr float kLightestThunderOvercast = 0.4f;
+constexpr double kAshOvercastFadeSeconds = 15.0;
 
 float Mix(float from, float to, float amount)
 {
@@ -146,23 +147,27 @@ float WeatherDirector::NextUnit()
     return static_cast<float>(m_random >> 8) / static_cast<float>(1u << 24);
 }
 
-bool WeatherDirector::LightningWeather(const WeatherReading& reading) const
+bool WeatherDirector::LightningWeather(const WeatherReading& reading, double nowSeconds)
 {
+    if (reading.ash)
+        m_lastAshSeconds = nowSeconds;
     if (reading.overcastWeight > 0.0f)
-        return !reading.ash && reading.thunderOvercast >= kLightestThunderOvercast;
+        return nowSeconds - m_lastAshSeconds >= kAshOvercastFadeSeconds &&
+               reading.thunderOvercast >= kLightestThunderOvercast;
     return m_blend[kWeatherRain] >= kStormRainBlend;
 }
 
 float WeatherDirector::Flash(const WeatherReading& reading, const WeatherTuning& tuning, double nowSeconds)
 {
-    const bool storm = tuning.lightning > 0.0f && LightningWeather(reading);
+    const bool storm = LightningWeather(reading, nowSeconds) && tuning.lightning > 0.0f;
     if (!storm)
     {
         m_nextStrike = 0.0;
         return WeatherLightningEnvelope(nowSeconds - m_lastStrike) * std::max(tuning.lightning, 0.0f);
     }
     if (m_nextStrike == 0.0)
-        m_nextStrike = nowSeconds + kShortestStrikeGapSeconds * NextUnit();
+        m_nextStrike = std::max(nowSeconds + kShortestStrikeGapSeconds * NextUnit(),
+                                m_lastStrike + kShortestStrikeGapSeconds);
     if (nowSeconds >= m_nextStrike)
     {
         m_lastStrike = nowSeconds;

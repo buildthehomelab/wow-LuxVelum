@@ -375,6 +375,57 @@ void CheckLightning()
     ash.ash = true;
     Check(strikesIn(ash) == 0, "falling ash shares the storm palette but has no lightning");
 
+    WeatherDirector afterAsh;
+    WeatherReading ashEnding = ash;
+    double clock = kStart;
+    for (int frame = 0; frame < 300; ++frame, clock += kFrame)
+        afterAsh.Step(ashEnding, tuning, clock);
+    ashEnding.ash = false;
+    bool flashedAfterAsh = false;
+    for (int frame = 0; frame < 300; ++frame, clock += kFrame)
+        flashedAfterAsh = flashedAfterAsh || afterAsh.Step(ashEnding, tuning, clock).flash > 0.0f;
+    Check(!flashedAfterAsh, "the storm palette fading out after ash has no lightning");
+
+    WeatherDirector flapping;
+    double lastStrike = -1000.0;
+    double shortestGap = 1000.0;
+    bool flashingBefore = false;
+    for (int frame = 0; frame < kFrames; ++frame)
+    {
+        WeatherReading flapped = thunderOnly;
+        flapped.thunderOvercast = (frame / 15) % 2 ? 0.41f : 0.39f;
+        const double now = kStart + frame * kFrame;
+        const bool flashingNow = flapping.Step(flapped, tuning, now).flash > 0.3f;
+        if (flashingNow && !flashingBefore)
+        {
+            shortestGap = std::min(shortestGap, now - lastStrike);
+            lastStrike = now;
+        }
+        flashingBefore = flashingNow;
+    }
+    Check(shortestGap >= 7.9, "a storm at the edge of the threshold keeps strikes at least 8 seconds apart");
+
+    WeatherDirector seeded;
+    float seedDuringFlash = -1.0f;
+    bool seedHeld = true;
+    float firstSeed = -1.0f;
+    bool seedMoved = false;
+    for (int frame = 0; frame < kFrames; ++frame)
+    {
+        const WeatherLook look = seeded.Step(thunderOnly, tuning, kStart + frame * kFrame);
+        if (look.flash > 0.0f)
+        {
+            seedHeld = seedHeld && (seedDuringFlash < 0.0f || look.strikeSeed == seedDuringFlash);
+            seedDuringFlash = look.strikeSeed;
+            firstSeed = firstSeed < 0.0f ? look.strikeSeed : firstSeed;
+            seedMoved = seedMoved || look.strikeSeed != firstSeed;
+        }
+        else
+            seedDuringFlash = -1.0f;
+    }
+    Check(seedHeld, "a strike's place holds while it flashes");
+    Check(seedMoved, "each strike lights another place");
+
     tuning.lightning = 0.0f;
     WeatherDirector off;
     heavy.intensity = 1.0f;
