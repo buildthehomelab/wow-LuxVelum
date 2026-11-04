@@ -103,11 +103,12 @@ void WeatherDirector::Advance(const WeatherReading& reading, const WeatherTuning
 {
     const int current = WeatherKindOf(reading.type, reading.intensity, reading.ash);
     const float target = current == kNoWeatherKind ? 0.0f : std::min(reading.intensity, 1.0f);
+    const bool applyAtOnce = elapsed < 0.0 || reading.mapId != m_lastMapId;
+    m_lastMapId = reading.mapId;
     for (int kind = 0; kind < kWeatherKinds; ++kind)
     {
         const float kindTarget = kind == current ? target : 0.0f;
-        m_blend[kind] =
-            elapsed < 0.0 ? kindTarget : EasedToward(m_blend[kind], kindTarget, elapsed, tuning.easeSeconds);
+        m_blend[kind] = applyAtOnce ? kindTarget : EasedToward(m_blend[kind], kindTarget, elapsed, tuning.easeSeconds);
     }
     if (elapsed < 0.0)
         return;
@@ -119,6 +120,7 @@ void WeatherDirector::Advance(const WeatherReading& reading, const WeatherTuning
     const float wetting = std::max(m_blend[kWeatherRain], m_blend[kWeatherSnow]);
     if (wetting > 0.0f)
     {
+        m_wetness = LocalWetness(reading);
         m_hasWetPlace = true;
         m_wetMapId = reading.mapId;
         m_wetPosition[0] = reading.position[0];
@@ -244,8 +246,11 @@ float WeatherLightningEnvelope(double sinceStrike)
     float envelope = static_cast<float>(std::min(sinceStrike / kFlashRiseSeconds, 1.0) *
                                         std::exp(-sinceStrike / kFirstStrokeSeconds));
     if (sinceStrike > kSecondStrokeDelay)
-        envelope += kSecondStrokeShare *
-                    static_cast<float>(std::exp(-(sinceStrike - kSecondStrokeDelay) / kSecondStrokeSeconds));
+    {
+        const double sinceSecond = sinceStrike - kSecondStrokeDelay;
+        envelope += kSecondStrokeShare * static_cast<float>(std::min(sinceSecond / kFlashRiseSeconds, 1.0) *
+                                                            std::exp(-sinceSecond / kSecondStrokeSeconds));
+    }
     return std::min(envelope, 1.0f);
 }
 
