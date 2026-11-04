@@ -215,7 +215,15 @@ void CheckDriftWraps()
         smooth = smooth && std::min(moved, kCloudWindWrap - moved) < kLongestStepTiles;
     }
     Check(windWrapped, "the wind wraps");
-    Check(smooth, "the wind wraps by whole repeats of everything sampled, so the clouds don't jump");
+    Check(smooth, "the wind moves in small steps across its wrap");
+    constexpr double kShaderRepeats[] = {0.25, 0.5, 1.0, 1.2, 4.8};
+    bool wholeRepeats = true;
+    for (double repeats : kShaderRepeats)
+    {
+        const double tiles = kCloudWindWrap * repeats;
+        wholeRepeats = wholeRepeats && std::fabs(tiles - std::round(tiles)) < 1e-9;
+    }
+    Check(wholeRepeats, "the wrap is a whole number of tiles at every repeat vf_clouds samples");
     Check(std::fabs(drift.warpV) < kCloudWarpWrap && std::fabs(drift.windV) < kCloudWindWrap,
           "the drift stays small enough for a float");
 }

@@ -1188,6 +1188,12 @@ void Renderer::DrawSkyClouds(IDirect3DDevice9* dev, const SceneDepth& depth, con
     DWORD clientLodBias = 0;
     dev->GetSamplerState(0, D3DSAMP_MIPMAPLODBIAS, &clientLodBias);
     dev->SetSamplerState(0, D3DSAMP_MIPMAPLODBIAS, 0);
+    DWORD clientDepthBias = 0;
+    DWORD clientSlopeBias = 0;
+    dev->GetRenderState(D3DRS_DEPTHBIAS, &clientDepthBias);
+    dev->GetRenderState(D3DRS_SLOPESCALEDEPTHBIAS, &clientSlopeBias);
+    dev->SetRenderState(D3DRS_DEPTHBIAS, 0);
+    dev->SetRenderState(D3DRS_SLOPESCALEDEPTHBIAS, 0);
     dev->SetPixelShader(cfg.quality <= 1 ? m_cloudsLow : m_clouds);
     if (LogEnabled(LogLevel::Info))
         m_cloudTimer.Begin(dev);
@@ -1195,6 +1201,8 @@ void Renderer::DrawSkyClouds(IDirect3DDevice9* dev, const SceneDepth& depth, con
     dev->SetSamplerState(0, D3DSAMP_MIPMAPLODBIAS, clientLodBias);
     DrawBolt(dev, in, cfg);
     m_cloudTimer.End();
+    dev->SetRenderState(D3DRS_DEPTHBIAS, clientDepthBias);
+    dev->SetRenderState(D3DRS_SLOPESCALEDEPTHBIAS, clientSlopeBias);
 }
 
 bool Renderer::EnsureCloudShader(IDirect3DDevice9* dev)

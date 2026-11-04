@@ -12,7 +12,7 @@ constexpr float kOvercastWeightPerRow = 0.05f;
 constexpr uint32_t kOvercastFirstPaletteRow = 8951;
 constexpr uint32_t kNightLevelFirstRow = 9001;
 constexpr uint32_t kNightLevelLastRow = 9005;
-constexpr double kCloudWindWrap = 4.0;
+constexpr double kCloudWindWrap = 20.0;
 constexpr double kCloudWarpWrap = 1.0;
 
 enum OvercastPalette

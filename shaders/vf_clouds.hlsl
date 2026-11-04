@@ -67,12 +67,6 @@ float MarchDensity(float2 place, float2 dx, float2 dy)
     return (body + (billow - kBillowMean) * kBillowAmount - cCloudShape.x) / cCloudShape.y;
 }
 
-float FullDensity(float2 place, float2 dx, float2 dy)
-{
-    float fine = tex2Dgrad(sCloudField, place * kFineRepeats, dx * kFineRepeats, dy * kFineRepeats).g;
-    return MarchDensity(place, dx, dy) + (fine - kBillowMean) * kFineAmount / cCloudShape.y;
-}
-
 float4 main(float2 pixel : VPOS) : COLOR0
 {
     float3 ray = normalize(ViewToWorldDirection(ViewRayAtUnitDepth(pixel + 0.5)));
@@ -110,8 +104,9 @@ float4 main(float2 pixel : VPOS) : COLOR0
     }
 
     float2 surface = base + climb * hitShare;
-    float density = FullDensity(surface, dx, dy);
     float atSurface = MarchDensity(surface, dx, dy);
+    float fine = tex2Dgrad(sCloudField, surface * kFineRepeats, dx * kFineRepeats, dy * kFineRepeats).g;
+    float density = atSurface + (fine - kBillowMean) * kFineAmount / cCloudShape.y;
     float2 slope = float2(MarchDensity(surface + float2(kNormalReach, 0), dx, dy) - atSurface,
                           MarchDensity(surface + float2(0, kNormalReach), dx, dy) - atSurface) / kNormalReach;
     float3 normal = normalize(float3(-slope * kNormalSteepness, -1));
@@ -120,8 +115,9 @@ float4 main(float2 pixel : VPOS) : COLOR0
         saturate(dot(normal.xy, cCloudToSun.xy) + normal.z * cCloudToSun.z * kSunFromBelowShare + kWrappedLight);
     float thick = saturate(density);
     float body = tex2Dgrad(sCloudField, surface, dx, dy).r;
-    float hollow = tex2Dlod(sCloudField, float4(surface, 0, lod + kHollowMips)).r;
-    float mass = tex2Dlod(sCloudField, float4(surface, 0, lod + kMassMips)).r;
+    float coarseLod = max(lod, 0);
+    float hollow = tex2Dlod(sCloudField, float4(surface, 0, coarseLod + kHollowMips)).r;
+    float mass = tex2Dlod(sCloudField, float4(surface, 0, coarseLod + kMassMips)).r;
     float bulge = saturate((body - hollow) * kBulgeContrast + 0.5);
     float masses = saturate((mass - 0.5) * kMassContrast + 0.5);
     float light = saturate(sunlit * (1 - kThickShadow * thick) * (kBulgeFloor + kBulgeGain * bulge) *

@@ -18,6 +18,8 @@ constexpr CoverKey kCoverByWeight[] = {{0.0f, 0.0f},  {0.05f, 0.14f}, {0.15f, 0.
 constexpr float kThinnestThickRange = 0.2f;
 constexpr float kThickestThickRange = 0.55f;
 constexpr float kThickRangePerCover = 0.6f;
+constexpr float kBillowPullWhenClosing = 0.2f;
+constexpr float kStartsClosingAtCover = 0.8f;
 constexpr float kLightestOvercast = 0.15f;
 constexpr float kHeaviestOvercast = 0.8f;
 constexpr float kBellyAtLightestOvercast = 0.72f;
@@ -266,7 +268,8 @@ CloudShape CloudShapeFor(const OvercastReading& reading, const CloudTuning& tuni
 {
     CloudShape shape;
     shape.cover = std::max(CloudCoverOfWeight(reading.weight), std::clamp(tuning.fairCover, 0.0f, 1.0f));
-    shape.threshold = 1.0f - shape.cover;
+    shape.threshold =
+        1.0f - shape.cover - kBillowPullWhenClosing * SmoothShare(kStartsClosingAtCover, 1.0f, shape.cover);
     shape.thickRange = std::clamp(shape.cover * kThickRangePerCover, kThinnestThickRange, kThickestThickRange);
     shape.opacity = std::clamp(tuning.opacity, 0.0f, 1.0f);
     return shape;
