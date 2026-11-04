@@ -4,6 +4,7 @@
 
 #include "log.h"
 #include "water_classify.h"
+#include "weather_storm.h"
 
 #include <algorithm>
 #include <cmath>
@@ -69,6 +70,9 @@ constexpr uintptr_t kSunDayEnd = 0x00A41CA0;
 constexpr uintptr_t kSunDayStart = 0x00A41CA4;
 constexpr uintptr_t kDayNightScreenEffectLightSlot = 0x00D38B58;
 constexpr uintptr_t kDayNightStormBlend = 0x00D38B88;
+constexpr uintptr_t kMapWeather = 0x00CD7544;
+constexpr uintptr_t kMapWeatherIntensity = 0x08;
+constexpr uintptr_t kMapWeatherType = 0x20;
 
 constexpr uintptr_t kLightSkyColors[kSkyColorCount] = {0x00D38BE0, 0x00D38BE4, 0x00D38BE8,
                                                        0x00D38BEC, 0x00D38BF0, 0x00D38BF4};
@@ -356,11 +360,25 @@ bool FindGlowCompositePassesUnsafe(const ScreenEffects& effects, GlowCompositePa
     return true;
 }
 
+double ClockSeconds();
+
+float EasedWeatherStormBlend()
+{
+    static WeatherStormEase ease;
+    const uintptr_t weather = Read<uintptr_t>(kMapWeather);
+    const float target = weather ? WeatherStormTarget(Read<int32_t>(weather + kMapWeatherType),
+                                                      Read<float>(weather + kMapWeatherIntensity))
+                                 : 0.0f;
+    return ease.Step(target, ClockSeconds());
+}
+
 LightParamsSelection ReadLightParamsSelection()
 {
     LightParamsSelection selection;
     const float storm = Read<float>(kDayNightStormBlend);
     selection.stormBlend = std::isfinite(storm) ? std::clamp(storm, 0.0f, 1.0f) : 0.0f;
+    if (GlobalConfig().Get().weatherFog)
+        selection.stormBlend = std::max(selection.stormBlend, EasedWeatherStormBlend());
     const int32_t slot = Read<int32_t>(kDayNightScreenEffectLightSlot);
     if (slot >= 0 && slot < FogData::kLightParamsSlots)
         selection.screenEffectSlot = slot;

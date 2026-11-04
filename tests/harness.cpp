@@ -1916,6 +1916,7 @@ void CheckSettingsWindowKeepsItsSize(Harness& h, const PanelRect& expected, cons
           what);
 }
 
+#include "weather_storm_checks.h"
 #include "authored_fog_checks.h"
 #include "fog_integration_checks.h"
 #include "local_lights_checks.h"
@@ -2001,6 +2002,7 @@ int Run(const std::wstring& outDir, const std::string& dataPath, const std::wstr
     Check(classic.Load(dataPath), "Classic fog data loads");
     CheckClassicData(classic);
     CheckStormBlendsLayersByClassicIndex(classic);
+    weather_storm_checks::Run();
     CheckScreenEffectLightSlot(classic);
     CheckZoneLights(classic);
     CheckAuthoredFogFollowsClientDirectLight(classic);

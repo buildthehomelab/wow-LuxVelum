@@ -109,6 +109,7 @@ const BoolSetting kBoolSettings[] = {
     {"LiquidDepth", &Config::liquidDepth},           {"SunMarker", &Config::sunMarker},
     {"Water", &Config::water},                       {"Multisampling", &Config::multisampling},
     {"ClassicNoise", &Config::classicNoise},       {"TransparentFog", &Config::transparentFog},
+    {"WeatherFog", &Config::weatherFog},
 };
 
 const BoolSetting kWaterBoolSettings[] = {

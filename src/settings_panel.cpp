@@ -181,6 +181,9 @@ bool DrawDensity(Config& c)
                       "Drifting fog banks where the Classic layers carry the modern client's noise, mostly in storms; "
                       "it thins those layers to about half their density on average. Off: the density variation "
                       "above applies to them instead");
+    changed |= Toggle("Weather fog", c.weatherFog,
+                      "Rain, snow and mist bring in the storm fog of the area you're in, by how heavy they are. "
+                      "Off: the clear fog stays in all weather");
     return changed;
 }
 
