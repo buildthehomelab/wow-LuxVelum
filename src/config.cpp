@@ -90,6 +90,77 @@ const FloatSetting kFloatSettings[] = {
     {"FarClipMax", &Config::farClipMax, 0.0f, kEngineFarClipMax},
     {"MaxDistance", &Config::maxDistance, 200.0f, 5000.0f},
     {"Temporal", &Config::temporal, 0.0f, 0.97f},
+    {"CloudPreviewWeight", &Config::cloudPreviewWeight, 0.0f, 1.0f},
+    {"CloudPreviewStorm", &Config::cloudPreviewStorm, 0.0f, 1.0f},
+    {"CloudFairCover", &Config::cloudFairCover, 0.0f, 1.0f},
+    {"CloudDarkness", &Config::cloudDarkness, 0.25f, 3.0f},
+    {"CloudOpacity", &Config::cloudOpacity, 0.0f, 1.0f},
+    {"CloudWind", &Config::cloudWind, 0.0f, 8.0f},
+    {"WeatherBolts", &Config::weatherBolts, 0.0f, 1.5f},
+    {"WeatherStrength", &Config::weatherStrength, 0.0f, 2.0f},
+    {"WeatherEaseSeconds", &Config::weatherEaseSeconds, 1.0f, 300.0f},
+    {"WeatherAfterRainMist", &Config::weatherAfterRainMist, 0.0f, 2.0f},
+    {"WeatherDryingSeconds", &Config::weatherDryingSeconds, 30.0f, 3600.0f},
+    {"WeatherLowSunRays", &Config::weatherLowSunRays, 0.0f, 4.0f},
+    {"WeatherClearingRays", &Config::weatherClearingRays, 0.0f, 4.0f},
+    {"WeatherRainRings", &Config::weatherRainRings, 0.0f, 3.0f},
+    {"WeatherLightning", &Config::weatherLightning, 0.0f, 1.5f},
+    {"WeatherDawnMist", &Config::weatherDawnMist, 0.0f, 2.0f},
+    {"AshSun", &Config::ashSun, 0.0f, 2.0f},
+    {"AshRays", &Config::ashRays, 0.0f, 2.0f},
+    {"AshExposure", &Config::ashExposure, 0.0f, 2.0f},
+    {"AshDensity", &Config::ashDensity, 0.0f, 4.0f},
+    {"AshDrift", &Config::ashDrift, 0.0f, 6.0f},
+    {"AshVariation", &Config::ashVariation, 0.0f, 4.0f},
+    {"AshTint", &Config::ashTint, 0.0f, 1.0f},
+    {"AshWaves", &Config::ashWaves, 0.0f, 2.5f},
+    {"AshWind", &Config::ashWind, 0.0f, 4.0f},
+    {"AshFoam", &Config::ashFoam, 0.0f, 4.0f},
+    {"AshGlint", &Config::ashGlint, 0.0f, 2.0f},
+    {"RainSun", &Config::rainSun, 0.0f, 2.0f},
+    {"RainRays", &Config::rainRays, 0.0f, 2.0f},
+    {"RainExposure", &Config::rainExposure, 0.0f, 2.0f},
+    {"RainDensity", &Config::rainDensity, 0.0f, 4.0f},
+    {"RainDrift", &Config::rainDrift, 0.0f, 6.0f},
+    {"RainVariation", &Config::rainVariation, 0.0f, 4.0f},
+    {"RainTint", &Config::rainTint, 0.0f, 1.0f},
+    {"RainWaves", &Config::rainWaves, 0.0f, 2.5f},
+    {"RainWind", &Config::rainWind, 0.0f, 4.0f},
+    {"RainFoam", &Config::rainFoam, 0.0f, 4.0f},
+    {"RainGlint", &Config::rainGlint, 0.0f, 2.0f},
+    {"SnowSun", &Config::snowSun, 0.0f, 2.0f},
+    {"SnowRays", &Config::snowRays, 0.0f, 2.0f},
+    {"SnowExposure", &Config::snowExposure, 0.0f, 2.0f},
+    {"SnowDensity", &Config::snowDensity, 0.0f, 4.0f},
+    {"SnowDrift", &Config::snowDrift, 0.0f, 6.0f},
+    {"SnowVariation", &Config::snowVariation, 0.0f, 4.0f},
+    {"SnowTint", &Config::snowTint, 0.0f, 1.0f},
+    {"SnowWaves", &Config::snowWaves, 0.0f, 2.5f},
+    {"SnowWind", &Config::snowWind, 0.0f, 4.0f},
+    {"SnowFoam", &Config::snowFoam, 0.0f, 4.0f},
+    {"SnowGlint", &Config::snowGlint, 0.0f, 2.0f},
+    {"SandSun", &Config::sandSun, 0.0f, 2.0f},
+    {"SandRays", &Config::sandRays, 0.0f, 2.0f},
+    {"SandExposure", &Config::sandExposure, 0.0f, 2.0f},
+    {"SandDensity", &Config::sandDensity, 0.0f, 4.0f},
+    {"SandDrift", &Config::sandDrift, 0.0f, 6.0f},
+    {"SandVariation", &Config::sandVariation, 0.0f, 4.0f},
+    {"SandTint", &Config::sandTint, 0.0f, 1.0f},
+    {"SandWaves", &Config::sandWaves, 0.0f, 2.5f},
+    {"SandWind", &Config::sandWind, 0.0f, 4.0f},
+    {"SandFoam", &Config::sandFoam, 0.0f, 4.0f},
+    {"SandGlint", &Config::sandGlint, 0.0f, 2.0f},
+    {"FogSun", &Config::fogSun, 0.0f, 2.0f},
+    {"FogRays", &Config::fogRays, 0.0f, 2.0f},
+    {"FogExposure", &Config::fogExposure, 0.0f, 2.0f},
+    {"FogDensity", &Config::fogDensity, 0.0f, 4.0f},
+    {"FogDrift", &Config::fogDrift, 0.0f, 6.0f},
+    {"FogVariation", &Config::fogVariation, 0.0f, 4.0f},
+    {"FogTint", &Config::fogTint, 0.0f, 1.0f},
+    {"FogWaves", &Config::fogWaves, 0.0f, 2.5f},
+    {"FogWind", &Config::fogWind, 0.0f, 4.0f},
+    {"FogFoam", &Config::fogFoam, 0.0f, 4.0f},
+    {"FogGlint", &Config::fogGlint, 0.0f, 2.0f},
 };
 
 const FloatSetting kWaterFloatSettings[] = {
@@ -109,6 +180,9 @@ const BoolSetting kBoolSettings[] = {
     {"LiquidDepth", &Config::liquidDepth},           {"SunMarker", &Config::sunMarker},
     {"Water", &Config::water},                       {"Multisampling", &Config::multisampling},
     {"ClassicNoise", &Config::classicNoise},       {"TransparentFog", &Config::transparentFog},
+    {"WeatherEffects", &Config::weatherEffects},
+    {"StormClouds", &Config::stormClouds},
+    {"WeatherThunder", &Config::weatherThunder},
 };
 
 const BoolSetting kWaterBoolSettings[] = {
@@ -398,6 +472,40 @@ std::string HotkeyName(const Hotkey& key)
     if (key.alt)
         name += "Alt+";
     return name + KeyName(key.virtualKey);
+}
+
+CloudTuning CloudTuningFrom(const Config& c)
+{
+    return {c.cloudPreviewWeight, c.cloudPreviewStorm, c.cloudFairCover, c.cloudDarkness, c.cloudOpacity};
+}
+
+WeatherTuning WeatherTuningFrom(const Config& c)
+{
+    WeatherTuning t;
+    t.profiles[kWeatherRain] = {c.rainSun,  c.rainRays, c.rainExposure, c.rainDensity, c.rainDrift, c.rainVariation,
+                                c.rainTint, c.rainWaves, c.rainWind,    c.rainFoam,    c.rainGlint};
+    t.profiles[kWeatherSnow] = {c.snowSun,  c.snowRays, c.snowExposure, c.snowDensity, c.snowDrift, c.snowVariation,
+                                c.snowTint, c.snowWaves, c.snowWind,    c.snowFoam,    c.snowGlint};
+    t.profiles[kWeatherSand] = {c.sandSun,  c.sandRays, c.sandExposure, c.sandDensity, c.sandDrift, c.sandVariation,
+                                c.sandTint, c.sandWaves, c.sandWind,    c.sandFoam,    c.sandGlint};
+    t.profiles[kWeatherFog] = {c.fogSun,  c.fogRays, c.fogExposure, c.fogDensity, c.fogDrift, c.fogVariation,
+                               c.fogTint, c.fogWaves, c.fogWind,    c.fogFoam,    c.fogGlint};
+    t.profiles[kWeatherAsh] = {c.ashSun,  c.ashRays, c.ashExposure, c.ashDensity, c.ashDrift, c.ashVariation,
+                               c.ashTint, c.ashWaves, c.ashWind,    c.ashFoam,    c.ashGlint};
+    t.strength = c.weatherStrength;
+    t.easeSeconds = c.weatherEaseSeconds;
+    t.dryingSeconds = c.weatherDryingSeconds;
+    t.afterRainMist = c.weatherAfterRainMist;
+    t.lowSunRays = c.weatherLowSunRays;
+    t.clearingRays = c.weatherClearingRays;
+    t.rainRings = c.weatherRainRings;
+    t.lightning = c.weatherLightning;
+    t.dawnMist = c.weatherDawnMist;
+    static const float kTintColors[kWeatherKinds][3] = {
+        {0.70f, 0.75f, 0.80f}, {0.85f, 0.92f, 1.00f}, {0.78f, 0.62f, 0.40f}, {0.78f, 0.80f, 0.82f},
+        {0.45f, 0.42f, 0.40f}};
+    std::memcpy(t.tintColors, kTintColors, sizeof(kTintColors));
+    return t;
 }
 
 bool SameFogSettings(const Config& a, const Config& b)

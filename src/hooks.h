@@ -16,6 +16,7 @@ void EnableForeverLookOnHookedClient();
 bool InstallTransparentFogHooks();
 
 void InstallFarClipHooks();
+void InstallSkyCloudHook();
 
 struct FogFrameStatus
 {

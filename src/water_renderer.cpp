@@ -20,6 +20,9 @@
 
 namespace
 {
+constexpr float kMinWeatherWaterWind = 0.5f;
+constexpr float kRainWindowShare = 0.45f;
+constexpr float kMaxWeatherWaterWind = 10.0f;
 constexpr UINT kWaterPixelConstants = 72;
 constexpr DWORD kWaterSamplerStages = 16;
 constexpr UINT kCommonConstants = 9;
@@ -995,6 +998,11 @@ bool WaterRenderer::Begin(IDirect3DDevice9* dev, const SceneDepth& depth, const 
     m_in = in;
     m_water = water;
     m_cfg = cfg;
+    const WeatherLook weather = OutdoorWeatherLook(in, cfg);
+    m_cfg.waterWaves *= weather.waves;
+    m_cfg.waterWind = std::clamp(m_cfg.waterWind * weather.wind, kMinWeatherWaterWind, kMaxWeatherWaterWind);
+    m_cfg.waterFoam *= weather.foam;
+    m_cfg.waterSpecular *= weather.glint;
     std::fill(std::begin(m_draws), std::end(m_draws), 0u);
     m_armed = true;
     return true;
@@ -1106,7 +1114,9 @@ bool WaterRenderer::SimulateRipples(IDirect3DDevice9* dev, double seconds)
     m_contacts.Update(m_water.contacts, seconds);
     m_summaryContacts = std::max(m_summaryContacts, m_contacts.Contacts());
     const bool supported = m_ripples.Supported(dev);
-    if (!m_ripples.Running() && !m_contacts.Emitting())
+    const float rainDropsPerStep = OutdoorWeatherLook(m_in, m_cfg).rainDropsPerSecond *
+                                   static_cast<float>(kWaterRippleStepSeconds);
+    if (!m_ripples.Running() && !m_contacts.Emitting() && rainDropsPerStep <= 0.0f)
     {
         m_ripplesAvailable = m_ripplesAvailable && supported;
         return false;
@@ -1129,8 +1139,13 @@ bool WaterRenderer::SimulateRipples(IDirect3DDevice9* dev, double seconds)
     WaterRippleDisturbance disturbances[kMaxWaterRippleDisturbances];
     for (int step = 0; step < schedule.steps; ++step)
     {
-        const uint32_t count =
+        uint32_t count =
             m_contacts.TakeDisturbances(schedule.stepSeconds[step], disturbances, kMaxWaterRippleDisturbances);
+        const float rainHalfExtent = texels * kWaterRippleTexelYards * kRainWindowShare;
+        const float windowShare = static_cast<float>(texels) / kWaterRippleTexels;
+        const float cappedDrops = std::min(rainDropsPerStep, static_cast<float>(kMaxWaterRainDropsPerStep));
+        count += m_rainDrops.Take(cappedDrops * windowShare * windowShare, centre, rainHalfExtent,
+                                  disturbances + count, kMaxWaterRippleDisturbances - count);
         m_ripples.Step(dev, centre, disturbances, count);
     }
     m_summaryRippleTexels = std::max(m_summaryRippleTexels, texels);
@@ -1293,7 +1308,7 @@ void WaterRenderer::BuildReflectionFog()
                              GlobalFogData().Resolve(m_in.mapId, m_in.camPos, m_in.dayFraction, m_in.lightParams,
                                                      authored);
     const FogParams fog = WithMeanNoise(BuildFogParams(m_in, m_cfg, hasAuthored ? &authored : nullptr));
-    const float exposure = fog.authored ? m_cfg.classicExposure : m_cfg.exposure;
+    const float exposure = (fog.authored ? m_cfg.classicExposure : m_cfg.exposure) * fog.weather.exposure;
     auto linearScattered = [&fog, exposure](const float* rgb) {
         float out[3];
         for (int c = 0; c < 3; ++c)

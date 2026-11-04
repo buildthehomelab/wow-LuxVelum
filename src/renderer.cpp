@@ -33,6 +33,9 @@
 #include "ps_noisy_split_composite_high.h"
 #include "ps_noisy_split_composite_low.h"
 #include "ps_noisy_split_composite_mid.h"
+#include "ps_bolt.h"
+#include "ps_clouds.h"
+#include "ps_clouds_low.h"
 #include "ps_probe.h"
 #include "ps_ray_blur.h"
 #include "ps_ray_composite.h"
@@ -43,6 +46,7 @@
 #include "ps_split_composite_mid.h"
 #include "ps_temporal.h"
 #include "ps_history_depth.h"
+#include "vs_bolt.h"
 #include "vs_fullscreen.h"
 
 #include <algorithm>
@@ -69,6 +73,21 @@ constexpr UINT kRayScale = 4;
 constexpr float kMinViewportDepthExtent = 0.01f;
 constexpr float kDeepestWorldDepthInFullRangeViewport = 0.9999995f;
 constexpr float kWorldDepthMargin = 2.0e-6f;
+constexpr UINT kCloudConstantsRegister = 80;
+constexpr double kCloudLongestDriftStep = 1.0;
+constexpr float kCloudDeckHeightYards = 1500.0f;
+constexpr float kCloudTileWidth = 6.0f;
+constexpr float kCloudCurvature = 0.25f;
+constexpr float kCloudSunGlow = 0.5f;
+constexpr float kCloudStrikeWander = 7.0f;
+constexpr float kBehindDistantLandDepth = 0.99903f;
+constexpr float kBoltHalfWidthPixelsAt1080 = 11.0f;
+constexpr float kReferenceScreenHeight = 1080.0f;
+constexpr float kBoltGain = 2.2f;
+constexpr float kFaintestBoltFlash = 0.015f;
+constexpr float kBoltColour[3] = {0.82f, 0.88f, 1.0f};
+constexpr float kCloudLoggedStepsPerWeight = 20.0f;
+constexpr double kCloudSummarySeconds = 60.0;
 constexpr float kSummarySeconds = 60.0f;
 constexpr float kProbeSeconds = 60.0f;
 constexpr float kProbeDebugSeconds = 30.0f;
@@ -396,6 +415,7 @@ void Renderer::ReleaseDefaultPool()
     SafeRelease(m_probeReadback);
     SafeRelease(m_probeCopied);
     m_gpuTimer.Release();
+    m_cloudTimer.Release();
     m_lateGodRays = {};
     SafeRelease(m_state);
     m_lowW = m_lowH = m_rayW = m_rayH = 0;
@@ -437,6 +457,12 @@ void Renderer::ReleaseAll()
     SafeRelease(m_rayBlur);
     SafeRelease(m_rayComposite);
     SafeRelease(m_probe);
+    SafeRelease(m_clouds);
+    SafeRelease(m_cloudsLow);
+    SafeRelease(m_boltVs);
+    SafeRelease(m_boltPs);
+    SafeRelease(m_boltDecl);
+    SafeRelease(m_cloudField);
     SafeRelease(m_decl);
 }
 
@@ -973,6 +999,254 @@ void Renderer::BindWrappedVolume(IDirect3DDevice9* dev, DWORD stage, IDirect3DVo
     dev->SetSamplerState(stage, D3DSAMP_ADDRESSW, D3DTADDRESS_WRAP);
 }
 
+bool Renderer::EnsureCloudField(IDirect3DDevice9* dev)
+{
+    if (m_cloudField)
+        return true;
+    IDirect3DTexture9* texture = nullptr;
+    if (FAILED(dev->CreateTexture(kCloudFieldSize, kCloudFieldSize, 0, 0, D3DFMT_A8R8G8B8, D3DPOOL_MANAGED, &texture,
+                                  nullptr)))
+        return false;
+    std::vector<uint32_t> field = PreparedCloudField();
+    uint32_t size = kCloudFieldSize;
+    for (DWORD level = 0; level < texture->GetLevelCount(); ++level)
+    {
+        D3DLOCKED_RECT locked = {};
+        if (FAILED(texture->LockRect(level, &locked, nullptr, 0)))
+        {
+            texture->Release();
+            return false;
+        }
+        for (uint32_t y = 0; y < size; ++y)
+            std::memcpy(static_cast<BYTE*>(locked.pBits) + y * locked.Pitch, &field[static_cast<size_t>(y) * size],
+                        size * sizeof(uint32_t));
+        texture->UnlockRect(level);
+        if (size > 1)
+        {
+            field = ShrinkCloudField(field, size);
+            size /= 2;
+        }
+    }
+    m_cloudField = texture;
+    VF_LOG_INFO("storm clouds: noise field ready");
+    return true;
+}
+
+void Renderer::StepCloudDrift(const OvercastReading& overcast, const Config& cfg, long long now)
+{
+    const double elapsed = m_cloudTicks ? std::min(TickSeconds(now - m_cloudTicks), kCloudLongestDriftStep) : 0.0;
+    m_cloudTicks = now;
+    AdvanceCloudDrift(m_cloudDrift, elapsed, static_cast<double>(CloudWindSpeedFor(overcast)) * cfg.cloudWind);
+}
+
+void Renderer::LogCloudOvercast(const OvercastReading& overcast)
+{
+    const float rounded = std::round(overcast.weight * kCloudLoggedStepsPerWeight) / kCloudLoggedStepsPerWeight;
+    if (rounded == m_loggedOvercast)
+        return;
+    m_loggedOvercast = rounded;
+    VF_LOG_INFO("storm clouds: overcast %.2f, thunder share %.2f", overcast.weight, overcast.share[kOvercastStorm]);
+}
+
+void Renderer::LogCloudCost(IDirect3DDevice9* dev, long long now)
+{
+    if (!LogEnabled(LogLevel::Info) || TickSeconds(now - m_cloudSummaryTicks) < kCloudSummarySeconds)
+        return;
+    m_cloudSummaryTicks = now;
+    char gpuTime[64] = {};
+    DescribeGpuTime(m_cloudTimer, dev, gpuTime, sizeof(gpuTime));
+    if (gpuTime[0])
+        VF_LOG_INFO("storm clouds: %s", gpuTime);
+}
+
+void Renderer::UpdateBolt(const SkyCloudInputs& in, const float* viewToWorld)
+{
+    if (in.strikeSeed == m_boltSeed)
+        return;
+    m_boltSeed = in.strikeSeed;
+    const float forward[3] = {viewToWorld[8], viewToWorld[9], viewToWorld[10]};
+    const float azimuth = BoltAzimuthFacing(forward, in.strikeSeed, in.strikeAsked);
+    m_bolt = BuildLightningBolt(in.strikeSeed, azimuth, in.strikeAsked);
+}
+
+bool Renderer::EnsureBoltShaders(IDirect3DDevice9* dev)
+{
+    static const D3DVERTEXELEMENT9 kBoltElements[] = {
+        {0, 0, D3DDECLTYPE_FLOAT4, D3DDECLMETHOD_DEFAULT, D3DDECLUSAGE_POSITION, 0},
+        {0, 16, D3DDECLTYPE_FLOAT2, D3DDECLMETHOD_DEFAULT, D3DDECLUSAGE_TEXCOORD, 0},
+        D3DDECL_END(),
+    };
+    if (!m_boltVs && FAILED(dev->CreateVertexShader(reinterpret_cast<const DWORD*>(g_vs_bolt), &m_boltVs)))
+        return false;
+    if (!m_boltPs && FAILED(dev->CreatePixelShader(reinterpret_cast<const DWORD*>(g_ps_bolt), &m_boltPs)))
+        return false;
+    return m_boltDecl || SUCCEEDED(dev->CreateVertexDeclaration(kBoltElements, &m_boltDecl));
+}
+
+void Renderer::DrawBolt(IDirect3DDevice9* dev, const SkyCloudInputs& in, const Config& cfg)
+{
+    if (!m_bolt.visible || in.flash < kFaintestBoltFlash || cfg.weatherBolts <= 0.0f || !EnsureBoltShaders(dev))
+        return;
+    const D3DVIEWPORT9& vp = in.viewport;
+    const float* proj = in.glProjection;
+    const BoltCamera camera = {in.cameraRelativeView,
+                               {proj[0], proj[5], proj[8], proj[9]},
+                               {static_cast<float>(vp.Width) * 0.5f, static_cast<float>(vp.Height) * 0.5f},
+                               kBoltHalfWidthPixelsAt1080 * static_cast<float>(vp.Height) / kReferenceScreenHeight,
+                               kBehindDistantLandDepth};
+    m_boltVertices.clear();
+    AddBoltRibbons(m_bolt, camera, m_boltVertices);
+    if (m_boltVertices.empty())
+        return;
+    const Float4 colour = {kBoltColour[0], kBoltColour[1], kBoltColour[2],
+                           std::min(in.flash * kBoltGain, 1.0f) * cfg.weatherBolts};
+    dev->SetVertexShader(m_boltVs);
+    dev->SetVertexDeclaration(m_boltDecl);
+    dev->SetPixelShader(m_boltPs);
+    dev->SetPixelShaderConstantF(0, &colour.x, 1);
+    dev->SetRenderState(D3DRS_SRCBLEND, D3DBLEND_ONE);
+    dev->SetRenderState(D3DRS_DESTBLEND, D3DBLEND_ONE);
+    dev->DrawPrimitiveUP(D3DPT_TRIANGLELIST, static_cast<UINT>(m_boltVertices.size() / 3), m_boltVertices.data(),
+                         sizeof(BoltVertex));
+}
+
+void Renderer::DrawSkyClouds(IDirect3DDevice9* dev, const SceneDepth& depth, const SkyCloudInputs& in,
+                             const Config& cfg, const OvercastReading& overcast, const CloudShape& shape,
+                             const CloudTuning& tuning)
+{
+    float viewToWorld[16];
+    if (!Invert4x4(in.cameraRelativeView, viewToWorld))
+        return;
+    viewToWorld[12] = in.camPos[0];
+    viewToWorld[13] = in.camPos[1];
+    viewToWorld[14] = in.camPos[2];
+    const float* proj = in.glProjection;
+    const D3DVIEWPORT9& vp = in.viewport;
+    float common[9][4] = {
+        {static_cast<float>(vp.X), static_cast<float>(vp.Y), static_cast<float>(vp.Width),
+         static_cast<float>(vp.Height)},
+        {},
+        {proj[0], proj[5], proj[8], proj[9]},
+        {},
+        {},
+        {},
+        {},
+        {},
+        {},
+    };
+    std::memcpy(common[4], viewToWorld, sizeof(viewToWorld));
+
+    CloudLight light;
+    UnpackColor(in.skyMiddleColor, light.sky);
+    UnpackColor(in.ambientColor, light.ambient);
+    UnpackColor(in.directColor, light.direct);
+    float sun[3];
+    UnpackColor(in.sunColor, sun);
+    const CloudColours colours = CloudColoursFor(light, overcast, tuning);
+
+    const double yardsPerTile = kCloudDeckHeightYards * kCloudTileWidth;
+    UpdateBolt(in, viewToWorld);
+    const float boltGlow = m_bolt.visible && cfg.weatherBolts > 0.0f ? 1.0f : 0.0f;
+    const Float4 constants[9] = {
+        {shape.threshold, shape.thickRange, 0.0f, 0.0f},
+        {static_cast<float>(m_cloudDrift.windU), static_cast<float>(m_cloudDrift.windV),
+         static_cast<float>(m_cloudDrift.warpU), static_cast<float>(m_cloudDrift.warpV)},
+        {static_cast<float>(std::fmod(in.camPos[0] / yardsPerTile, kCloudWindWrap)),
+         static_cast<float>(std::fmod(in.camPos[1] / yardsPerTile, kCloudWindWrap)), 1.0f / kCloudTileWidth,
+         kCloudCurvature},
+        {colours.lit[0], colours.lit[1], colours.lit[2], shape.opacity},
+        {colours.dark[0], colours.dark[1], colours.dark[2], 0.0f},
+        {in.toLight[0], in.toLight[1], in.toLight[2], 0.0f},
+        {sun[0], sun[1], sun[2], kCloudSunGlow},
+        {in.strikeSeed, in.strikeSeed * kCloudStrikeWander, in.flash, 0.0f},
+        {m_bolt.topDirection[0], m_bolt.topDirection[1], m_bolt.topDirection[2], boltGlow},
+    };
+
+    PrepareFullscreenPasses(dev);
+    dev->SetPixelShaderConstantF(0, &common[0][0], 9);
+    dev->SetPixelShaderConstantF(kCloudConstantsRegister, &constants[0].x, 9);
+    const RECT world = ViewportRect(vp);
+    D3DVIEWPORT9 fullDepthRange = vp;
+    fullDepthRange.MinZ = 0.0f;
+    fullDepthRange.MaxZ = 1.0f;
+    dev->SetDepthStencilSurface(depth.bound);
+    dev->SetViewport(&fullDepthRange);
+    dev->SetScissorRect(&world);
+    dev->SetRenderState(D3DRS_ZENABLE, D3DZB_TRUE);
+    dev->SetRenderState(D3DRS_ZFUNC, D3DCMP_LESS);
+    dev->SetRenderState(D3DRS_SCISSORTESTENABLE, TRUE);
+    dev->SetRenderState(D3DRS_ALPHABLENDENABLE, TRUE);
+    dev->SetRenderState(D3DRS_SRCBLEND, D3DBLEND_SRCALPHA);
+    dev->SetRenderState(D3DRS_DESTBLEND, D3DBLEND_INVSRCALPHA);
+    dev->SetRenderState(D3DRS_BLENDOP, D3DBLENDOP_ADD);
+    dev->SetRenderState(D3DRS_COLORWRITEENABLE,
+                        D3DCOLORWRITEENABLE_RED | D3DCOLORWRITEENABLE_GREEN | D3DCOLORWRITEENABLE_BLUE);
+    BindTexture(dev, 0, m_cloudField, true);
+    dev->SetSamplerState(0, D3DSAMP_ADDRESSU, D3DTADDRESS_WRAP);
+    dev->SetSamplerState(0, D3DSAMP_ADDRESSV, D3DTADDRESS_WRAP);
+    dev->SetSamplerState(0, D3DSAMP_MIPFILTER, D3DTEXF_LINEAR);
+    DWORD clientLodBias = 0;
+    dev->GetSamplerState(0, D3DSAMP_MIPMAPLODBIAS, &clientLodBias);
+    dev->SetSamplerState(0, D3DSAMP_MIPMAPLODBIAS, 0);
+    DWORD clientDepthBias = 0;
+    DWORD clientSlopeBias = 0;
+    dev->GetRenderState(D3DRS_DEPTHBIAS, &clientDepthBias);
+    dev->GetRenderState(D3DRS_SLOPESCALEDEPTHBIAS, &clientSlopeBias);
+    dev->SetRenderState(D3DRS_DEPTHBIAS, 0);
+    dev->SetRenderState(D3DRS_SLOPESCALEDEPTHBIAS, 0);
+    dev->SetPixelShader(cfg.quality <= 1 ? m_cloudsLow : m_clouds);
+    if (LogEnabled(LogLevel::Info))
+        m_cloudTimer.Begin(dev);
+    DrawFullscreenTriangleAtDepth(dev, kBehindDistantLandDepth);
+    dev->SetSamplerState(0, D3DSAMP_MIPMAPLODBIAS, clientLodBias);
+    DrawBolt(dev, in, cfg);
+    m_cloudTimer.End();
+    dev->SetRenderState(D3DRS_DEPTHBIAS, clientDepthBias);
+    dev->SetRenderState(D3DRS_SLOPESCALEDEPTHBIAS, clientSlopeBias);
+}
+
+bool Renderer::EnsureCloudShader(IDirect3DDevice9* dev)
+{
+    if (!m_clouds && FAILED(dev->CreatePixelShader(reinterpret_cast<const DWORD*>(g_ps_clouds), &m_clouds)))
+        return false;
+    return m_cloudsLow ||
+           SUCCEEDED(dev->CreatePixelShader(reinterpret_cast<const DWORD*>(g_ps_clouds_low), &m_cloudsLow));
+}
+
+bool Renderer::DrawCloudsWithClientStateSaved(IDirect3DDevice9* dev, const SceneDepth& depth, const SkyCloudInputs& in,
+                                              const Config& cfg)
+{
+    const CloudTuning tuning = CloudTuningFrom(cfg);
+    const OvercastReading overcast = OvercastWithPreview(in.overcast, tuning);
+    const long long now = Ticks();
+    StepCloudDrift(overcast, cfg, now);
+    LogCloudOvercast(overcast);
+    const CloudShape shape = CloudShapeFor(overcast, tuning);
+    if (shape.cover <= 0.0f)
+        return true;
+    LogCloudCost(dev, now);
+    if (!EnsureShaders(dev) || !EnsureStateBlock(dev))
+        return false;
+    if (!EnsureCloudShader(dev) || !EnsureCloudField(dev))
+        return NotReady("cloud shader or noise field unavailable");
+    return WithClientStateSaved(dev, depth, [&](IDirect3DSurface9*, const D3DSURFACE_DESC&) {
+        DrawSkyClouds(dev, depth, in, cfg, overcast, shape, tuning);
+        return true;
+    });
+}
+
+bool Renderer::RenderSkyClouds(IDirect3DDevice9* dev, const SceneDepth& depth, const SkyCloudInputs& in,
+                               const Config& cfg)
+{
+    m_skip = "";
+    if (dev->TestCooperativeLevel() != D3D_OK)
+        return NotReady("device not ready");
+    const bool fogHistory = m_historyValid;
+    const bool drawn = DrawCloudsWithClientStateSaved(dev, depth, in, cfg);
+    m_historyValid = fogHistory;
+    return drawn;
+}
+
 FogParams Renderer::DrawableFog(IDirect3DDevice9* dev, const FogParams& fog)
 {
     if (!AnyLayerNoise(fog))
@@ -1360,7 +1634,8 @@ bool Renderer::RenderPasses(IDirect3DDevice9* dev, const SceneDepth& depth, IDir
         sunPx[1] = vp.Y + (0.5f - ndcY * 0.5f) * vp.Height;
         sunScreenFade = std::clamp(1.6f - std::max(std::fabs(ndcX), std::fabs(ndcY)), 0.0f, 1.0f);
     }
-    const float rayStrength = cfg.godRays * fog.lightVisibility * sunScreenFade;
+    const float rayStrength =
+        WeatherGodRayStrength(cfg.godRays, fog.weather, in.toLight[2]) * fog.lightVisibility * sunScreenFade;
     const bool rays = rayStrength > kMinGodRayStrength;
     const bool raysAfterWorld = rays && pass == FogPass::BeforeTransparents;
     const bool raysNow = rays && !raysAfterWorld;
@@ -1443,8 +1718,14 @@ bool Renderer::RenderPasses(IDirect3DDevice9* dev, const SceneDepth& depth, IDir
     BindWrappedVolume(dev, 9, m_densityNoise);
     UploadLayerNoise(dev, fog, in.camPos, now);
     const double windPeriod = static_cast<double>(kDensityNoiseSize) / std::max(cfg.noiseScale, 0.001f);
-    const Float4 variation = {m_densityNoise ? cfg.noiseAmount : 0.0f, cfg.noiseScale,
-                              static_cast<float>(std::fmod(TickSeconds(now) * cfg.noiseWindSpeed, windPeriod)), 0.0f};
+    const double windElapsed = m_weatherWindTicks ? TickSeconds(now - m_weatherWindTicks) : 0.0;
+    m_weatherWindTicks = now;
+    m_weatherWindPhase =
+        std::fmod(m_weatherWindPhase + windElapsed * cfg.noiseWindSpeed * (fog.weather.drift - 1.0f), windPeriod);
+    const float noiseAmount = std::min(cfg.noiseAmount * fog.weather.variation, 1.0f);
+    const Float4 variation = {m_densityNoise ? noiseAmount : 0.0f, cfg.noiseScale,
+                              static_cast<float>(std::fmod(TickSeconds(now) * cfg.noiseWindSpeed + m_weatherWindPhase,
+                                                           windPeriod)), 0.0f};
     dev->SetPixelShaderConstantF(78, &variation.x, 1);
     BindTexture(dev, 0, depthTexture, false);
     DrawFullscreenTriangle(dev);
@@ -1495,7 +1776,8 @@ bool Renderer::RenderPasses(IDirect3DDevice9* dev, const SceneDepth& depth, IDir
     dev->SetPixelShaderConstantF(12, &compositeMarchFog.layers[0].start, 6 * kFogLayers);
     m_drawnGlowCompensation = cfg.glowCompensation && sceneBlend ? in.clientGlowAmount : 0.0f;
     const Float4 composite[3] = {
-        {fog.authored ? cfg.classicExposure : cfg.exposure, raysNow && sceneBlend ? rayStrength : 0.0f,
+        {(fog.authored ? cfg.classicExposure : cfg.exposure) * fog.weather.exposure,
+         raysNow && sceneBlend ? rayStrength : 0.0f,
          static_cast<float>(cfg.debugView), blendMode},
         {fog.rayColor[0], fog.rayColor[1], fog.rayColor[2], 0.0f},
         {sunPx[0], sunPx[1], cfg.sunMarker && sunInFront ? 1.0f : 0.0f, m_drawnGlowCompensation},

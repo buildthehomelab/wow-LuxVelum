@@ -6,6 +6,9 @@
 
 namespace
 {
+constexpr float kLightningFlashColor[3] = {0.75f, 0.82f, 1.0f};
+constexpr float kLightningFlashFloor = 0.10f;
+constexpr float kLightningFlashPerEmissive = 1.5f;
 constexpr float kHazeDensity = 0.00035f;
 constexpr float kHazeG = 0.75f;
 constexpr float kHazeIsotropic = 0.3f;
@@ -299,6 +302,52 @@ float InteriorWeight(const FrameInputs& in, const Config& cfg)
                : 0.0f;
 }
 
+void TintTowardWeather(float* rgb, const float* tint, float amount)
+{
+    const float luminance = Luminance(rgb);
+    for (int channel = 0; channel < 3; ++channel)
+        rgb[channel] += (luminance * tint[channel] - rgb[channel]) * amount;
+}
+
+void ApplyWeatherTint(const WeatherLook& weather, FogParams& fog)
+{
+    if (weather.tint <= 0.0f)
+        return;
+    float tint[3] = {weather.tintColor[0], weather.tintColor[1], weather.tintColor[2]};
+    Encode(tint, fog.linear);
+    for (FogLayer& layer : fog.layers)
+    {
+        TintTowardWeather(layer.emissive, tint, weather.tint);
+        TintTowardWeather(layer.shadowEmissive, tint, weather.tint);
+        TintTowardWeather(layer.diffuse, tint, weather.tint);
+    }
+    for (LayerNoise& noise : fog.noise)
+        TintTowardWeather(noise.fade, tint, weather.tint);
+}
+
+void AddLightningFlash(float flash, FogParams& fog)
+{
+    if (flash <= 0.0f)
+        return;
+    float light[3] = {kLightningFlashColor[0], kLightningFlashColor[1], kLightningFlashColor[2]};
+    Encode(light, fog.linear);
+    auto brighten = [&](float* rgb) {
+        const float gain = kLightningFlashFloor + kLightningFlashPerEmissive * Luminance(rgb);
+        for (int channel = 0; channel < 3; ++channel)
+            rgb[channel] += light[channel] * flash * gain;
+    };
+    for (FogLayer& layer : fog.layers)
+    {
+        if (layer.density <= 0.0f)
+            continue;
+        brighten(layer.emissive);
+        brighten(layer.shadowEmissive);
+    }
+    for (LayerNoise& noise : fog.noise)
+        if (noise.alpha > 0.0f)
+            brighten(noise.fade);
+}
+
 void ApplyInteriorFog(float weight, const Config& cfg, FogParams& fog)
 {
     const float retainedDensity = std::isfinite(cfg.interiorDensity) ? std::clamp(cfg.interiorDensity, 0.0f, 1.0f)
@@ -334,9 +383,19 @@ void UnpackColor(uint32_t argb, float* rgb)
     rgb[2] = static_cast<float>(argb & 0xFF) / 255.0f;
 }
 
-FogParams BuildFogParams(const FrameInputs& in, const Config& cfg, const AuthoredFog* authored)
+WeatherLook OutdoorWeatherLook(const FrameInputs& in, const Config& cfg)
 {
+    return NeutralWeatherLook(in.weather, 1.0f - InteriorWeight(in, cfg));
+}
+
+FogParams BuildFogParams(const FrameInputs& in, const Config& settings, const AuthoredFog* authored)
+{
+    Config cfg = settings;
+    const WeatherLook weather = OutdoorWeatherLook(in, settings);
+    cfg.sunScatter *= weather.sun;
+    cfg.density *= weather.density;
     FogParams p = {};
+    p.weather = weather;
     p.linear = ScattersInLinearLight(cfg);
     p.authored = authored != nullptr;
     const float interiorWeight = InteriorWeight(in, cfg);
@@ -376,6 +435,12 @@ FogParams BuildFogParams(const FrameInputs& in, const Config& cfg, const Authore
         DerivedLayers(in, cfg, p, elevationFadedScatter, fogDistance, fogColor, p.layers);
         DistanceLayer(in, cfg, p, elevationFadedScatter, fogColor, distanceFog);
     }
+    for (LayerNoise& noise : p.noise)
+        for (float(&velocity)[3] : noise.velocity)
+            for (float& axis : velocity)
+                axis *= weather.drift;
+    ApplyWeatherTint(weather, p);
+    AddLightningFlash(weather.flash, p);
     ApplyInteriorFog(interiorWeight, cfg, p);
     return p;
 }

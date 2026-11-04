@@ -9,6 +9,7 @@
 #include "water_data.h"
 #include "water_fft.h"
 #include "water_ripples.h"
+#include "water_rain.h"
 #include "water_types.h"
 
 #include <d3d9.h>
@@ -239,6 +240,7 @@ private:
     uint32_t m_summaryDroppedSteps = 0;
     double m_lastSeconds = -1.0;
     WaterRipples m_ripples;
+    WaterRainDrops m_rainDrops;
     WaterContactTracker m_contacts;
     Float4 m_rippleWindow = {};
     Float4 m_rippleShape = {};
