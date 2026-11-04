@@ -70,18 +70,13 @@ constexpr UINT kRayScale = 4;
 constexpr float kMinViewportDepthExtent = 0.01f;
 constexpr float kDeepestWorldDepthInFullRangeViewport = 0.9999995f;
 constexpr float kWorldDepthMargin = 2.0e-6f;
-constexpr UINT kCloudConstantsRegister = 100;
+constexpr UINT kCloudConstantsRegister = 80;
 constexpr double kCloudLongestDriftStep = 1.0;
-constexpr double kCloudSecondsPerTile = 900.0;
-constexpr double kCloudSecondsPerWarp = 2700.0;
-constexpr double kCloudWindBearing = 20.0;
-constexpr double kDegreesToRadians = 3.14159265358979323846 / 180.0;
 constexpr float kCloudDeckHeightYards = 1500.0f;
 constexpr float kCloudTileWidth = 6.0f;
 constexpr float kCloudCurvature = 0.12f;
 constexpr float kCloudSunGlow = 0.5f;
 constexpr double kCloudFlashWander = 97.0;
-constexpr float kCloudWarpCrosswind = 0.6f;
 constexpr float kCloudLoggedStepsPerWeight = 20.0f;
 constexpr double kCloudSummarySeconds = 60.0;
 constexpr float kSummarySeconds = 60.0f;
@@ -405,8 +400,6 @@ void Renderer::ReleaseDefaultPool()
     SafeRelease(m_sceneCopy);
     SafeRelease(m_localLightData);
     SafeRelease(m_densityNoise);
-    SafeRelease(m_cloudField);
-    SafeRelease(m_clouds);
     SafeRelease(m_authoredNoise);
     DropPendingDepthProbe();
     SafeRelease(m_probeTarget);
@@ -455,6 +448,8 @@ void Renderer::ReleaseAll()
     SafeRelease(m_rayBlur);
     SafeRelease(m_rayComposite);
     SafeRelease(m_probe);
+    SafeRelease(m_clouds);
+    SafeRelease(m_cloudField);
     SafeRelease(m_decl);
 }
 
@@ -599,7 +594,6 @@ bool Renderer::EnsureShaders(IDirect3DDevice9* dev)
         {"ps_ray_mask", g_ps_ray_mask, &m_rayMask},
         {"ps_ray_blur", g_ps_ray_blur, &m_rayBlur},
         {"ps_ray_composite", g_ps_ray_composite, &m_rayComposite},
-        {"ps_clouds", g_ps_clouds, &m_clouds},
     };
     static const D3DVERTEXELEMENT9 kElements[] = {
         {0, 0, D3DDECLTYPE_FLOAT4, D3DDECLMETHOD_DEFAULT, D3DDECLUSAGE_POSITION, 0},
@@ -1000,7 +994,7 @@ bool Renderer::EnsureCloudField(IDirect3DDevice9* dev)
     if (FAILED(dev->CreateTexture(kCloudFieldSize, kCloudFieldSize, 0, 0, D3DFMT_A8R8G8B8, D3DPOOL_MANAGED, &texture,
                                   nullptr)))
         return false;
-    std::vector<uint32_t> field = BuildCloudField(kCloudFieldSize);
+    std::vector<uint32_t> field = PreparedCloudField();
     uint32_t size = kCloudFieldSize;
     for (DWORD level = 0; level < texture->GetLevelCount(); ++level)
     {
@@ -1025,30 +1019,31 @@ bool Renderer::EnsureCloudField(IDirect3DDevice9* dev)
     return true;
 }
 
-void Renderer::AdvanceCloudDrift(const OvercastReading& overcast, const Config& cfg, long long now)
+void Renderer::StepCloudDrift(const OvercastReading& overcast, const Config& cfg, long long now)
 {
     const double elapsed = m_cloudTicks ? std::min(TickSeconds(now - m_cloudTicks), kCloudLongestDriftStep) : 0.0;
     m_cloudTicks = now;
-    const double step = elapsed * CloudWindSpeedFor(overcast) * cfg.cloudWind;
-    m_cloudDrift = std::fmod(m_cloudDrift + step / kCloudSecondsPerTile, 1.0);
-    m_cloudWarpDrift = std::fmod(m_cloudWarpDrift + step / kCloudSecondsPerWarp, 1.0);
+    AdvanceCloudDrift(m_cloudDrift, elapsed, static_cast<double>(CloudWindSpeedFor(overcast)) * cfg.cloudWind);
 }
 
-void Renderer::LogCloudState(IDirect3DDevice9* dev, const OvercastReading& overcast, long long now)
+void Renderer::LogCloudOvercast(const OvercastReading& overcast)
 {
     const float rounded = std::round(overcast.weight * kCloudLoggedStepsPerWeight) / kCloudLoggedStepsPerWeight;
-    if (rounded != m_loggedOvercast)
-    {
-        m_loggedOvercast = rounded;
-        VF_LOG_INFO("storm clouds: overcast %.2f, thunder share %.2f", overcast.weight,
-                    overcast.share[kOvercastStorm]);
-    }
-    if (TickSeconds(now - m_cloudSummaryTicks) < kCloudSummarySeconds)
+    if (rounded == m_loggedOvercast)
+        return;
+    m_loggedOvercast = rounded;
+    VF_LOG_INFO("storm clouds: overcast %.2f, thunder share %.2f", overcast.weight, overcast.share[kOvercastStorm]);
+}
+
+void Renderer::LogCloudCost(IDirect3DDevice9* dev, long long now)
+{
+    if (!LogEnabled(LogLevel::Info) || TickSeconds(now - m_cloudSummaryTicks) < kCloudSummarySeconds)
         return;
     m_cloudSummaryTicks = now;
-    char gpuTime[64];
+    char gpuTime[64] = {};
     DescribeGpuTime(m_cloudTimer, dev, gpuTime, sizeof(gpuTime));
-    VF_LOG_INFO("storm clouds: overcast %.2f%s", overcast.weight, gpuTime);
+    if (gpuTime[0])
+        VF_LOG_INFO("storm clouds: %s", gpuTime);
 }
 
 void Renderer::DrawSkyClouds(IDirect3DDevice9* dev, const SkyCloudInputs& in, const Config& cfg,
@@ -1084,21 +1079,19 @@ void Renderer::DrawSkyClouds(IDirect3DDevice9* dev, const SkyCloudInputs& in, co
     UnpackColor(in.sunColor, sun);
     const CloudColours colours = CloudColoursFor(light, overcast, tuning);
 
-    const double windBearing = kCloudWindBearing * kDegreesToRadians;
-    const float windX = static_cast<float>(m_cloudDrift * std::cos(windBearing));
-    const float windY = static_cast<float>(m_cloudDrift * std::sin(windBearing));
-    const float warp = static_cast<float>(m_cloudWarpDrift);
     const double yardsPerTile = kCloudDeckHeightYards * kCloudTileWidth;
     const Float4 constants[8] = {
         {shape.threshold, shape.softness, shape.thickRange, 0.0f},
-        {windX, windY, warp, -warp * kCloudWarpCrosswind},
-        {static_cast<float>(std::fmod(in.camPos[0] / yardsPerTile, 1.0)),
-         static_cast<float>(std::fmod(in.camPos[1] / yardsPerTile, 1.0)), 1.0f / kCloudTileWidth, kCloudCurvature},
+        {static_cast<float>(m_cloudDrift.windU), static_cast<float>(m_cloudDrift.windV),
+         static_cast<float>(m_cloudDrift.warpU), static_cast<float>(m_cloudDrift.warpV)},
+        {static_cast<float>(std::fmod(in.camPos[0] / yardsPerTile, kCloudWindWrap)),
+         static_cast<float>(std::fmod(in.camPos[1] / yardsPerTile, kCloudWindWrap)), 1.0f / kCloudTileWidth,
+         kCloudCurvature},
         {colours.lit[0], colours.lit[1], colours.lit[2], shape.opacity},
         {colours.dark[0], colours.dark[1], colours.dark[2], 0.0f},
         {in.toLight[0], in.toLight[1], in.toLight[2], 0.0f},
         {sun[0], sun[1], sun[2], kCloudSunGlow},
-        {static_cast<float>(std::fmod(m_cloudWarpDrift * kCloudFlashWander, 1.0)), 0.0f, in.flash, 0.0f},
+        {static_cast<float>(std::fmod(m_cloudDrift.warpU * kCloudFlashWander, 1.0)), 0.0f, in.flash, 0.0f},
     };
 
     PrepareFullscreenPasses(dev);
@@ -1118,11 +1111,43 @@ void Renderer::DrawSkyClouds(IDirect3DDevice9* dev, const SkyCloudInputs& in, co
     dev->SetSamplerState(0, D3DSAMP_ADDRESSU, D3DTADDRESS_WRAP);
     dev->SetSamplerState(0, D3DSAMP_ADDRESSV, D3DTADDRESS_WRAP);
     dev->SetSamplerState(0, D3DSAMP_MIPFILTER, D3DTEXF_LINEAR);
+    DWORD clientLodBias = 0;
+    dev->GetSamplerState(0, D3DSAMP_MIPMAPLODBIAS, &clientLodBias);
+    dev->SetSamplerState(0, D3DSAMP_MIPMAPLODBIAS, 0);
     dev->SetPixelShader(m_clouds);
     if (LogEnabled(LogLevel::Info))
         m_cloudTimer.Begin(dev);
     DrawFullscreenTriangle(dev);
     m_cloudTimer.End();
+    dev->SetSamplerState(0, D3DSAMP_MIPMAPLODBIAS, clientLodBias);
+}
+
+bool Renderer::EnsureCloudShader(IDirect3DDevice9* dev)
+{
+    return m_clouds || SUCCEEDED(dev->CreatePixelShader(reinterpret_cast<const DWORD*>(g_ps_clouds), &m_clouds));
+}
+
+bool Renderer::DrawCloudsWithClientStateSaved(IDirect3DDevice9* dev, const SceneDepth& depth, const SkyCloudInputs& in,
+                                              const Config& cfg)
+{
+    const CloudTuning tuning = {cfg.cloudPreviewWeight, cfg.cloudPreviewStorm, cfg.cloudFairCover, cfg.cloudDarkness,
+                                cfg.cloudOpacity};
+    const OvercastReading overcast = OvercastWithPreview(in.overcast, tuning);
+    const long long now = Ticks();
+    StepCloudDrift(overcast, cfg, now);
+    LogCloudOvercast(overcast);
+    const CloudShape shape = CloudShapeFor(overcast, tuning);
+    if (shape.cover <= 0.0f)
+        return true;
+    LogCloudCost(dev, now);
+    if (!EnsureShaders(dev) || !EnsureStateBlock(dev))
+        return false;
+    if (!EnsureCloudShader(dev) || !EnsureCloudField(dev))
+        return NotReady("cloud shader or noise field unavailable");
+    return WithClientStateSaved(dev, depth, [&](IDirect3DSurface9*, const D3DSURFACE_DESC&) {
+        DrawSkyClouds(dev, in, cfg, overcast, shape, tuning);
+        return true;
+    });
 }
 
 bool Renderer::RenderSkyClouds(IDirect3DDevice9* dev, const SceneDepth& depth, const SkyCloudInputs& in,
@@ -1130,24 +1155,11 @@ bool Renderer::RenderSkyClouds(IDirect3DDevice9* dev, const SceneDepth& depth, c
 {
     m_skip = "";
     if (dev->TestCooperativeLevel() != D3D_OK)
-        return Skip("device not ready");
-    const CloudTuning tuning = {cfg.cloudPreviewWeight, cfg.cloudPreviewStorm, cfg.cloudFairCover, cfg.cloudDarkness,
-                                cfg.cloudOpacity};
-    const OvercastReading overcast = OvercastWithPreview(in.overcast, tuning);
-    const long long now = Ticks();
-    AdvanceCloudDrift(overcast, cfg, now);
-    LogCloudState(dev, overcast, now);
-    const CloudShape shape = CloudShapeFor(overcast, tuning);
-    if (shape.cover <= 0.0f)
-        return true;
-    if (!EnsureShaders(dev) || !EnsureStateBlock(dev))
-        return false;
-    if (!EnsureCloudField(dev))
-        return Skip("cloud noise field unavailable");
-    return WithClientStateSaved(dev, depth, [&](IDirect3DSurface9*, const D3DSURFACE_DESC&) {
-        DrawSkyClouds(dev, in, cfg, overcast, shape, tuning);
-        return true;
-    });
+        return NotReady("device not ready");
+    const bool fogHistory = m_historyValid;
+    const bool drawn = DrawCloudsWithClientStateSaved(dev, depth, in, cfg);
+    m_historyValid = fogHistory;
+    return drawn;
 }
 
 FogParams Renderer::DrawableFog(IDirect3DDevice9* dev, const FogParams& fog)

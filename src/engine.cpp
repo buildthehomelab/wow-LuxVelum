@@ -79,6 +79,7 @@ constexpr size_t kMapWeatherTextureBytes = 260;
 constexpr uintptr_t kMapWeatherRainEffect = 0x13C;
 constexpr uintptr_t kMapWeatherSnowEffect = 0x140;
 constexpr uintptr_t kMapWeatherSandEffect = 0x144;
+constexpr uintptr_t kSkyPassEnabled = 0x00D38CCC;
 constexpr uintptr_t kLightSwapCount = 0x00D39018;
 constexpr uintptr_t kLightSwapEntries = 0x00D3901C;
 constexpr uintptr_t kLightSwapStride = 0x18;
@@ -531,6 +532,7 @@ bool BuildFrameInputsUnsafe(FrameInputs& out, bool withPointLights, const PointL
     out.mapId = Read<int32_t>(kCurrentMap);
     out.lightParams = ReadLightParamsSelection();
     out.weather = g_weatherLook;
+    g_overcast = ReadClientOvercast();
     const LocalLightCamera lightCamera = FrameLightCamera(out);
     CaptureLocalLightInputs(lightCamera, withPointLights, upload, out.localLights);
     if (withPointLights)
@@ -1051,7 +1053,7 @@ bool BuildSkyCloudInputs(IDirect3DDevice9* device, SkyCloudInputs& out)
     __try
     {
         OpaqueState state = {};
-        if (!CaptureOpaqueStateUnsafe(device, state))
+        if (!Read<uint32_t>(kSkyPassEnabled) || !CaptureOpaqueStateUnsafe(device, state))
             return false;
         std::memcpy(out.cameraRelativeView, state.cameraRelativeView, sizeof(out.cameraRelativeView));
         std::memcpy(out.glProjection, state.glProjection, sizeof(out.glProjection));

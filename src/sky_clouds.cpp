@@ -29,6 +29,10 @@ constexpr float kAmbientInCloud = 0.55f;
 constexpr float kDirectInCloud = 0.35f;
 constexpr float kCloudGain = 1.2f;
 constexpr float kWindAtHeaviest = 3.0f;
+constexpr double kSecondsPerWindTile = 900.0;
+constexpr double kSecondsPerWarpTile = 2700.0;
+constexpr double kWarpCrosswind = 0.6;
+constexpr double kWindBearingRadians = 20.0 * 3.14159265358979323846 / 180.0;
 
 constexpr uint32_t kBodyCells = 4;
 constexpr uint32_t kFineCells = 32;
@@ -147,6 +151,14 @@ uint32_t Channel(uint32_t texel, int shift)
 
 void AddLightSwapToOvercast(OvercastReading& reading, uint32_t areaLight, uint32_t light, float fade)
 {
+    if (areaLight >= kNightLevelFirstRow && areaLight <= kNightLevelLastRow && fade > 0.0f)
+    {
+        const float below = 1.0f - std::min(fade, 1.0f);
+        reading.weight *= below;
+        for (float& share : reading.share)
+            share *= below;
+        return;
+    }
     const uint32_t weightRow = areaLight % kLightCopyStep;
     const uint32_t paletteRow = light % kLightCopyStep;
     if (weightRow < kOvercastFirstWeightRow || weightRow >= kOvercastFirstWeightRow + kOvercastWeightRows)
@@ -246,6 +258,23 @@ CloudColours CloudColoursFor(const CloudLight& light, const OvercastReading& rea
 float CloudWindSpeedFor(const OvercastReading& reading)
 {
     return Mix(1.0f, kWindAtHeaviest, SmoothShare(kLightestOvercast, kHeaviestOvercast, reading.weight));
+}
+
+void AdvanceCloudDrift(CloudDrift& drift, double seconds, double speed)
+{
+    const double step = seconds * speed;
+    const double windTiles = step / kSecondsPerWindTile;
+    const double warpTiles = step / kSecondsPerWarpTile;
+    drift.windU = std::fmod(drift.windU + windTiles * std::cos(kWindBearingRadians), kCloudWindWrap);
+    drift.windV = std::fmod(drift.windV + windTiles * std::sin(kWindBearingRadians), kCloudWindWrap);
+    drift.warpU = std::fmod(drift.warpU + warpTiles, kCloudWarpWrap);
+    drift.warpV = std::fmod(drift.warpV - warpTiles * kWarpCrosswind, kCloudWarpWrap);
+}
+
+const std::vector<uint32_t>& PreparedCloudField()
+{
+    static const std::vector<uint32_t> field = BuildCloudField(kCloudFieldSize);
+    return field;
 }
 
 std::vector<uint32_t> BuildCloudField(uint32_t size)

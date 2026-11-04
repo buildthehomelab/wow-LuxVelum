@@ -10,6 +10,10 @@ constexpr uint32_t kOvercastFirstWeightRow = 8901;
 constexpr uint32_t kOvercastWeightRows = 18;
 constexpr float kOvercastWeightPerRow = 0.05f;
 constexpr uint32_t kOvercastFirstPaletteRow = 8951;
+constexpr uint32_t kNightLevelFirstRow = 9001;
+constexpr uint32_t kNightLevelLastRow = 9005;
+constexpr double kCloudWindWrap = 4.0;
+constexpr double kCloudWarpWrap = 1.0;
 
 enum OvercastPalette
 {
@@ -50,6 +54,14 @@ struct CloudColours
     float dark[3] = {};
 };
 
+struct CloudDrift
+{
+    double windU = 0.0;
+    double windV = 0.0;
+    double warpU = 0.0;
+    double warpV = 0.0;
+};
+
 struct CloudLight
 {
     float sky[3] = {};
@@ -64,6 +76,8 @@ float CloudCoverOfWeight(float weight);
 CloudShape CloudShapeFor(const OvercastReading& reading, const CloudTuning& tuning);
 CloudColours CloudColoursFor(const CloudLight& light, const OvercastReading& reading, const CloudTuning& tuning);
 float CloudWindSpeedFor(const OvercastReading& reading);
+void AdvanceCloudDrift(CloudDrift& drift, double seconds, double speed);
 
 std::vector<uint32_t> BuildCloudField(uint32_t size);
+const std::vector<uint32_t>& PreparedCloudField();
 std::vector<uint32_t> ShrinkCloudField(const std::vector<uint32_t>& field, uint32_t size);

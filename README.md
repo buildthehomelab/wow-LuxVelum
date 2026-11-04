@@ -254,35 +254,44 @@ map change dries it. With `ForeverGlow` or `ColorGrading` on, the storm slot's g
 client reads come from the code, and how any of this looks isn't confirmed in game.
 
 **Storm clouds.** A skybox model can't grow: its alpha is the light's weight, every unit scales with it alike, and the
-alpha key scales its threshold by the same alpha (`0x81FF88`), so the shape stays. A second model can't take over during a
-fade either: the client has three skybox slots (`0x7ED713`, first come, by skybox, any weight above 0), and a swap being
-taken away keeps its slot until its fade ends. So the clouds are a pass of their own: `sky_clouds` turns the overcast into a
-cover, and `vf_clouds` keeps the part of an evenly spread noise field above `1 - cover`, so a share of the sky is that share
-of the field and the clouds' edges move outward as the weight rises. The field is one tiling 512 x 512 texture made at
-first use, with its body in red, finer detail in green and a slow warp in blue and alpha.
+alpha key scales its threshold by the same alpha (`0x81FF88`), so the shape stays. A second model can't take over during
+a fade either: the client has three skybox slots (`0x7ED713`, first come, by skybox, any weight above 0), and a swap
+being taken away keeps its slot until its fade ends. So the clouds are a pass of their own: `sky_clouds` turns the
+overcast into a cover, and `vf_clouds` keeps the part of an evenly spread noise field above `1 - cover`, so a share of
+the sky is that share of the field and the clouds' edges move outward as the weight rises. The field is one tiling 512 x
+512 texture made at first use, with its body in red, finer detail in green and a slow warp in blue and alpha.
 
-The pass runs straight after the client's sky pass, from a hook on its one call site: `0x79ACBC E8` to `0x7F09B0`, a cdecl
-call skipped when `[0xCD8794]` says the camera is in liquid. Everything drawn later covers the clouds, so they need no depth
-test and leave no fringe around trees with multisampling, and the fog, the god rays' scene copy and water reflections all see
-them. The view and projection come from the Gx state read there, as the opaque capture reads them at `0x4F911D`; whether
-they match the opaque pass's on every frame isn't confirmed in game.
+The pass runs straight after the client's sky pass, from a hook on its one call site: `0x79ACBC E8` to `0x7F09B0`, a
+cdecl call the client skips when `[0xADF580]` is not above 0 (`0x79AC3F`) or `[0xCD8794]` says the camera is in liquid.
+Everything drawn later covers the clouds, so they need no depth test and leave no fringe around trees with
+multisampling. Drawn in that order, the fog, the god rays' scene copy and water reflections should see them; none of
+that has been watched in game. The client scissors its sky to the exterior it can see (`0x7F0AB9`) and returns early if
+`[0xD38CCC]` is 0. The pass honours the second but draws the whole viewport, so under an overcast it also spends time
+behind interiors. The view and projection come from the Gx state read there, as the opaque capture reads them at
+`0x4F911D`. The sky pass doesn't write them within three call levels; whether they match the opaque pass's on every
+frame isn't confirmed in game.
 
-How much cloud comes from the overcast the client is drawing. A swap list at `[0xD3901C]` (`0xD39018` entries, `0x18` apart,
-added by `0x7F10A0`, dropped at `0x7F1605`) holds for each swap the row it replaces at `+0x00`, a copy of the Light row it
-draws at `+0x04` whose first field is that row's ID, and its fade, 0 to 1, at `+0x08` (`0x7F1500`). mod-weather's overcast
-replaces the rows 8901 to 8918 (weights 0.05 to 0.90) with the palettes 8951 rain, 8952 storm, 8953 snow and 8954 sand, each
-plus 10000 per night brightness level copy. The weight is the sum of row weight times fade, so a fade between two steps or
-two palettes stays smooth. This is the only place the client tells thunder from heavy rain: its weather object keeps a type
-of 0 to 3 (`0x7846A0`). Anything else on the list is ignored, so without those rows there are no clouds.
+How much cloud comes from the overcast the client is drawing. A swap list at `[0xD3901C]` (`0xD39018` entries, `0x18`
+apart, added by `0x7F10A0`, dropped at `0x7F1605`) holds for each swap the row it replaces at `+0x00`, a copy of the
+Light row it draws at `+0x04` whose first field is that row's ID, and its fade, 0 to 1, at `+0x08` (`0x7F1500`).
+mod-weather's overcast replaces the rows 8901 to 8918 (weights 0.05 to 0.90) with the palettes 8951 rain, 8952 storm,
+8953 snow and 8954 sand, each plus 10000 per night brightness level copy. The weight adds up row weight times fade, in
+list order, so a fade between two steps or two palettes stays smooth. It isn't quite the client's own weight, `min(row
+weight, fade)` for each swap (`0x7EE66C`), which bumps partway through a fade. A night level's base swap, on rows 9001
+to 9005, covers what's before it by its fade, as it does in the client's blend: mod-night-brightness leaves the overcast
+of the layer below on the list when a player raises their level during weather. This is the only place the client tells
+thunder from heavy rain: its weather object keeps a type of 0 to 3 (`0x7846A0`). Anything else on the list is ignored,
+so without those rows there are no clouds.
 
-The colours come from the light the client has just blended (`0xD38BD4` ambient, `0xD38BD8` direct, `0xD38BE4` middle sky),
-so they follow the zone, the hour, the dark nights, each night brightness level and the overcast's own palette, with the thick
-parts darker the heavier the overcast and darkest under thunder. Lightning uses the director's flash. The clouds move with
-the wind at 20 degrees, up to three times as fast at a heavy overcast, and shift with the camera as a deck 1,500 yards up.
+The colours come from the light the client has just blended (`0xD38BD4` ambient, `0xD38BD8` direct, `0xD38BE4` middle
+sky), so they follow the zone, the hour, the dark nights, each night brightness level and the overcast's own palette,
+with the thick parts darker the heavier the overcast and darkest under thunder. Lightning uses the director's flash. The
+clouds move with the wind at 20 degrees, up to three times as fast at a heavy overcast, and shift with the camera as a
+deck 1,500 yards up.
 
-`CloudFairCover` draws them under a clear sky too, to try them as the only clouds. `0xD38C28` is the client's blended cloud
-density (`0x7F056A`) if they ever take that over per zone. None of the look is confirmed in game; the checks cover the
-overcast reading, the cover, the colours' order and the field.
+`CloudFairCover` draws them under a clear sky too, to try them as the only clouds. `0xD38C28` is the client's blended
+cloud density (`0x7F056A`) if they ever take that over per zone. None of the look is confirmed in game; the checks cover
+the overcast reading, the cover, the colours' order and the field.
 
 Rain rings are ordinary ripple disturbances at random points around the camera, at most 6 per 30 Hz step, so they share
 the ripple pass's cost and its limit of 48. Lightning is a timer in the DLL, not the client's own strokes, so a flash

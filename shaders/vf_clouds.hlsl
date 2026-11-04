@@ -1,13 +1,13 @@
 #include "vf_common.hlsli"
 
-float4 cCloudShape : register(c100);
-float4 cCloudDrift : register(c101);
-float4 cCloudPlace : register(c102);
-float4 cCloudLit : register(c103);
-float4 cCloudDark : register(c104);
-float4 cCloudToSun : register(c105);
-float4 cCloudSunColour : register(c106);
-float4 cCloudFlash : register(c107);
+float4 cCloudShape : register(c80);
+float4 cCloudDrift : register(c81);
+float4 cCloudPlace : register(c82);
+float4 cCloudLit : register(c83);
+float4 cCloudDark : register(c84);
+float4 cCloudToSun : register(c85);
+float4 cCloudSunColour : register(c86);
+float4 cCloudFlash : register(c87);
 
 sampler2D sCloudField : register(s0);
 

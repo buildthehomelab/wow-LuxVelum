@@ -102,8 +102,12 @@ private:
     void BindTexture(IDirect3DDevice9* dev, DWORD stage, IDirect3DBaseTexture9* tex, bool linear);
     void BindWrappedVolume(IDirect3DDevice9* dev, DWORD stage, IDirect3DVolumeTexture9* volume);
     bool EnsureCloudField(IDirect3DDevice9* dev);
-    void AdvanceCloudDrift(const OvercastReading& overcast, const Config& cfg, long long now);
-    void LogCloudState(IDirect3DDevice9* dev, const OvercastReading& overcast, long long now);
+    bool EnsureCloudShader(IDirect3DDevice9* dev);
+    void StepCloudDrift(const OvercastReading& overcast, const Config& cfg, long long now);
+    void LogCloudOvercast(const OvercastReading& overcast);
+    void LogCloudCost(IDirect3DDevice9* dev, long long now);
+    bool DrawCloudsWithClientStateSaved(IDirect3DDevice9* dev, const SceneDepth& depth, const SkyCloudInputs& in,
+                                        const Config& cfg);
     void DrawSkyClouds(IDirect3DDevice9* dev, const SkyCloudInputs& in, const Config& cfg,
                        const OvercastReading& overcast, const CloudShape& shape, const CloudTuning& tuning);
     FogParams DrawableFog(IDirect3DDevice9* dev, const FogParams& fog);
@@ -184,8 +188,7 @@ private:
     double m_weatherWindPhase = 0.0;
     long long m_cloudTicks = 0;
     long long m_cloudSummaryTicks = 0;
-    double m_cloudDrift = 0.0;
-    double m_cloudWarpDrift = 0.0;
+    CloudDrift m_cloudDrift;
     float m_loggedOvercast = -1.0f;
     unsigned m_frame = 0;
     unsigned m_logged = 0;

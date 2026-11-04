@@ -16,6 +16,8 @@ constexpr uint32_t kWeightRow045 = 8909;
 constexpr uint32_t kWeightRow080 = 8916;
 constexpr uint32_t kNightLevelCopy = 2 * kLightCopyStep;
 constexpr uint32_t kCheckedFieldSize = 64;
+constexpr uint32_t kNightLevelFour = 9004;
+constexpr uint32_t kLevelFourBaseLight = 30001;
 
 bool Near(float a, float b)
 {
@@ -49,6 +51,33 @@ void CheckOvercastReading()
     Check(Near(fading.weight, 0.8f) && Near(fading.share[kOvercastRain], 0.25f) &&
               Near(fading.share[kOvercastStorm], 0.75f),
           "heavy rain fading into thunder keeps the weight and moves the shares");
+
+    OvercastReading raisedLevel;
+    AddLightSwapToOvercast(raisedLevel, kWeightRow045, kRainLight, 1.0f);
+    AddLightSwapToOvercast(raisedLevel, kNightLevelFour, kLevelFourBaseLight, 1.0f);
+    AddLightSwapToOvercast(raisedLevel, kWeightRow045 + kNightLevelCopy, kRainLight + kNightLevelCopy, 1.0f);
+    raisedLevel = Finished(raisedLevel);
+    Check(Near(raisedLevel.weight, 0.45f), "a raised night level's own overcast replaces the one under it");
+
+    OvercastReading turnedToThunder;
+    AddLightSwapToOvercast(turnedToThunder, kOvercastFirstWeightRow + 2, kRainLight, 1.0f);
+    AddLightSwapToOvercast(turnedToThunder, kNightLevelFour, kLevelFourBaseLight, 1.0f);
+    AddLightSwapToOvercast(turnedToThunder, kWeightRow080 + kNightLevelCopy, kStormLight + kNightLevelCopy, 1.0f);
+    turnedToThunder = Finished(turnedToThunder);
+    Check(Near(turnedToThunder.weight, 0.8f) && Near(turnedToThunder.share[kOvercastStorm], 1.0f),
+          "rain left under a raised level doesn't count once thunder is on top");
+
+    OvercastReading stale;
+    AddLightSwapToOvercast(stale, kWeightRow045, kRainLight, 1.0f);
+    AddLightSwapToOvercast(stale, kNightLevelFour, kLevelFourBaseLight, 1.0f);
+    stale = Finished(stale);
+    Check(stale.weight == 0.0f, "an overcast left under a raised level with a clear sky on top draws nothing");
+
+    OvercastReading levelFadingIn;
+    AddLightSwapToOvercast(levelFadingIn, kWeightRow080, kRainLight, 1.0f);
+    AddLightSwapToOvercast(levelFadingIn, kNightLevelFour, kLevelFourBaseLight, 0.25f);
+    levelFadingIn = Finished(levelFadingIn);
+    Check(Near(levelFadingIn.weight, 0.6f), "a level fading in covers what's under it by its fade");
 
     OvercastReading other;
     AddLightSwapToOvercast(other, 9003, 12345, 1.0f);
@@ -158,9 +187,33 @@ void CheckField()
         seamJump += std::abs(first - last);
         innerJump += std::abs(first - nearby);
     }
-    Check(seamJump < innerJump * 3, "the field wraps at its edge without a seam");
+    Check(seamJump < innerJump * 3 / 2, "the field wraps at its edge without a seam");
     const std::vector<uint32_t> smaller = ShrinkCloudField(field, kCheckedFieldSize);
     Check(smaller.size() == (kCheckedFieldSize / 2) * (kCheckedFieldSize / 2), "each mip is half the size");
+    const std::vector<uint32_t> square = {0x10203040u, 0x10203040u, 0x30405060u, 0x30405060u};
+    Check(ShrinkCloudField(square, 2) == std::vector<uint32_t>{0x20304050u}, "a mip averages each channel on its own");
+}
+
+void CheckDriftWraps()
+{
+    CloudDrift drift;
+    constexpr double kOneStepSeconds = 7.0;
+    constexpr double kFastWind = 24.0;
+    constexpr double kLongestStepTiles = 0.25;
+    bool windWrapped = false;
+    bool smooth = true;
+    for (int step = 0; step < 4000; ++step)
+    {
+        const CloudDrift before = drift;
+        AdvanceCloudDrift(drift, kOneStepSeconds, kFastWind);
+        windWrapped = windWrapped || drift.windU < before.windU;
+        const double moved = std::fmod(std::fabs(drift.windU - before.windU), kCloudWindWrap);
+        smooth = smooth && std::min(moved, kCloudWindWrap - moved) < kLongestStepTiles;
+    }
+    Check(windWrapped, "the wind wraps");
+    Check(smooth, "the wind wraps by whole repeats of everything sampled, so the clouds don't jump");
+    Check(std::fabs(drift.warpV) < kCloudWarpWrap && std::fabs(drift.windV) < kCloudWindWrap,
+          "the drift stays small enough for a float");
 }
 
 void CheckWind()
@@ -178,6 +231,7 @@ void Run()
     CheckCover();
     CheckColours();
     CheckField();
+    CheckDriftWraps();
     CheckWind();
 }
 }
