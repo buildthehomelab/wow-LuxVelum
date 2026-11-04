@@ -82,6 +82,11 @@ constexpr uintptr_t kMapWeatherSandEffect = 0x144;
 constexpr uintptr_t kSkyPassEnabled = 0x00D38CCC;
 constexpr uintptr_t kPlaySoundFile = 0x004C9110;
 constexpr int kPlaySoundFileScriptChannel = 4;
+constexpr uintptr_t kFindCVar = 0x00767440;
+constexpr uintptr_t kCVarIntValue = 0x30;
+constexpr const char* kSoundEffectsCVar = "Sound_EnableSFX";
+constexpr const char* kAmbienceSoundCVar = "Sound_EnableAmbience";
+using FindCVarFunction = uintptr_t(__cdecl*)(const char* name);
 using PlaySoundFileFunction = int(__cdecl*)(const char* file, int channel);
 constexpr const char* kThunderClipFiles[kThunderClips] = {
     "Sound\\Ambience\\Weather\\ThunderNear01.mp3",   "Sound\\Ambience\\Weather\\ThunderNear02.mp3",
@@ -135,6 +140,8 @@ struct CodeBytes
 constexpr CodeBytes kPlaySoundFileCode = {
     "PlaySoundFile entry", kPlaySoundFile, 13,
     {0x55, 0x8B, 0xEC, 0x51, 0xF6, 0x05, 0x20, 0xAD, 0xB4, 0x00, 0x01, 0x75, 0x1B}};
+
+constexpr CodeBytes kFindCVarCode = {"cvar lookup entry", kFindCVar, 3, {0x55, 0x8B, 0xEC}};
 
 const CodeBytes kLightRecordStores[] = {
     {"light record copy destination", 0x007F3574, 5, {0xB9, 0xD4, 0x8B, 0xD3, 0x00}},
@@ -445,10 +452,17 @@ OvercastReading ReadClientOvercast()
 
 bool CodeBytesMatch(const CodeBytes& code);
 
+bool ClientCVarOn(const char* name)
+{
+    const uintptr_t cvar = reinterpret_cast<FindCVarFunction>(kFindCVar)(name);
+    return !cvar || Read<int32_t>(cvar + kCVarIntValue) != 0;
+}
+
 void PlayThunderClip(int clip)
 {
-    static const bool clientMatches = CodeBytesMatch(kPlaySoundFileCode);
-    if (clientMatches && clip >= 0 && clip < kThunderClips)
+    static const bool clientMatches = CodeBytesMatch(kPlaySoundFileCode) && CodeBytesMatch(kFindCVarCode);
+    if (clientMatches && clip >= 0 && clip < kThunderClips && ClientCVarOn(kSoundEffectsCVar) &&
+        ClientCVarOn(kAmbienceSoundCVar))
         reinterpret_cast<PlaySoundFileFunction>(kPlaySoundFile)(kThunderClipFiles[clip], kPlaySoundFileScriptChannel);
 }
 

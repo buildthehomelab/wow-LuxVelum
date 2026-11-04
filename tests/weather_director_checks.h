@@ -492,6 +492,20 @@ void CheckLightning()
     Check(askedHeardAfter >= 0.1 && askedHeardAfter <= 0.9,
           "a strike asked for is close, so it's heard almost at once");
 
+    WeatherDirector lateThunder;
+    lateThunder.Step(button, tuning, kStart);
+    Check(lateThunder.Step(quiet, tuning, kStart + 300.0).thunderClip == kNoThunderClip,
+          "a clip that comes up minutes late is dropped");
+    WeatherDirector movedMap;
+    WeatherReading elsewhere = quiet;
+    movedMap.Step(button, tuning, kStart);
+    elsewhere.mapId = quiet.mapId + 1;
+    bool heardElsewhere = false;
+    for (int frame = 1; frame < 60; ++frame)
+        heardElsewhere = heardElsewhere ||
+                         movedMap.Step(elsewhere, tuning, kStart + frame * kFrame).thunderClip != kNoThunderClip;
+    Check(!heardElsewhere, "thunder doesn't follow the player to another map");
+
     tuning.lightning = 0.0f;
     WeatherDirector askedWhenOff;
     askedWhenOff.Step(button, tuning, kStart);

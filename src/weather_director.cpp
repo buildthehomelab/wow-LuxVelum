@@ -39,6 +39,7 @@ constexpr ThunderBand kNearThunder = {0.2, 0.8, 0, 4};
 constexpr ThunderBand kMiddleThunder = {1.0, 2.5, 4, 3};
 constexpr ThunderBand kFarThunder = {3.0, 6.0, 7, 4};
 constexpr float kNearThunderShare = 0.25f;
+constexpr double kLatestThunderSeconds = 1.0;
 constexpr float kMiddleThunderShare = 0.35f;
 static_assert(kFarThunder.firstClip + kFarThunder.clips == kThunderClips, "every clip belongs to a band");
 
@@ -121,6 +122,8 @@ void WeatherDirector::Advance(const WeatherReading& reading, const WeatherTuning
     const int current = WeatherKindOf(reading.type, reading.intensity, reading.ash);
     const float target = current == kNoWeatherKind ? 0.0f : std::min(reading.intensity, 1.0f);
     const bool applyAtOnce = elapsed < 0.0 || reading.mapId != m_lastMapId;
+    if (reading.mapId != m_lastMapId)
+        m_thunderClip = kNoThunderClip;
     m_lastMapId = reading.mapId;
     for (int kind = 0; kind < kWeatherKinds; ++kind)
     {
@@ -186,7 +189,7 @@ int WeatherDirector::DueThunderClip(double nowSeconds)
 {
     if (m_thunderClip == kNoThunderClip || nowSeconds < m_thunderAt)
         return kNoThunderClip;
-    const int clip = m_thunderClip;
+    const int clip = nowSeconds - m_thunderAt > kLatestThunderSeconds ? kNoThunderClip : m_thunderClip;
     m_thunderClip = kNoThunderClip;
     return clip;
 }

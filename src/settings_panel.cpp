@@ -335,8 +335,8 @@ bool DrawWeather(Config& c)
     changed |= Slider("Lightning bolts", c.weatherBolts, 0.0f, 1.5f, "%.2f",
                       "How bright the bolts are that fork down from the clouds behind the land. 0 = flashes only");
     changed |= Toggle("Thunder", c.weatherThunder,
-                      "Thunder after each strike, sooner and louder the nearer it is, at the game's sound effects "
-                      "volume");
+                      "Thunder after each strike, sooner and louder the nearer it is. Follows the master volume, and "
+                      "is off when sound effects or ambient sounds are off");
     if (c.weatherEffects && c.weatherLightning > 0.0f && ImGui::Button("Strike now"))
         engine::RequestLightningStrike();
     changed |= Slider("Dawn mist", c.weatherDawnMist, 0.0f, 2.0f, "%.2f",

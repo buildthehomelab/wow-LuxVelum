@@ -311,10 +311,13 @@ the settings window fires one at once, ahead of the camera, whatever the weather
 `WeatherLightning` above 0, and bolts need the cloud pass, so a sky with no clouds has flashes only.
 
 **Thunder.** Each strike schedules one clip: near (a quarter, 0.2 to 0.8 s after the flash), middle (about a third, 1 to
-2.5 s) or far (the rest, 3 to 6 s), and **Strike now** is always near. The DLL calls the client's `PlaySoundFile` function
-(`0x4C9110`, as `0x9859EF` does, with the file and channel 4), checked against the 12340 bytes first, so `Sound_EnableSFX`
-and the effects volume apply. Clips are `Sound\Ambience\Weather\Thunder{Near,Middle,Far}NN.mp3`, from the client patches
-(wow-server `weather.py`). A missing file plays nothing. `WeatherThunder=0` silences it.
+2.5 s) or far (the rest, 3 to 6 s), and **Strike now** is always near. The DLL calls the client's `PlaySoundFile`
+function (`0x4C9110`, as `0x9859EF` does, with the file and channel 4), checked against the 12340 bytes first. That
+function's channel 4 (`SCRIPTSOUND`) follows the master volume and `Sound_EnableAllSound`, not the effects volume, and
+it is the only channel that doesn't loop, so the DLL itself skips the clip when `Sound_EnableSFX` or
+`Sound_EnableAmbience` is off. A clip more than a second late, or from before a map change, is dropped. Clips are
+`Sound\Ambience\Weather\Thunder{Near,Middle,Far}NN.mp3`, from the client patches (wow-server `weather.py`). A missing
+file plays nothing. `WeatherThunder=0` silences it.
 
 Rain rings are ordinary ripple disturbances at random points around the camera, at most 6 per 30 Hz step, so they share
 the ripple pass's cost and its limit of 48. Lightning fires under the thunder palette at a weight of at least 0.4, or
