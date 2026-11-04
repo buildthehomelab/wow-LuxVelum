@@ -14,7 +14,11 @@ sampler2D sCloudField : register(s0);
 static const float kHorizonStart = 0.01;
 static const float kHorizonFull = 0.09;
 static const float kDetailRepeats = 3;
-static const float kDetailAmount = 0.16;
+static const float kDetailAmount = 0.2;
+static const float kFineRepeats = 11;
+static const float kFineAmount = 0.06;
+static const float kBillowShading = 0.3;
+static const float kShadeFloor = 0.35;
 static const float kWarpRepeats = 0.5;
 static const float kWarpReach = 0.05;
 static const float kSunReach = 0.03;
@@ -39,7 +43,8 @@ float4 main(float2 pixel : VPOS) : COLOR0
 
     float body = tex2D(sCloudField, shaped).r;
     float detail = tex2D(sCloudField, shaped * kDetailRepeats).g - 0.5;
-    float density = body + detail * kDetailAmount;
+    float fine = tex2D(sCloudField, shaped * kFineRepeats).g - 0.5;
+    float density = body + detail * kDetailAmount + fine * kFineAmount;
 
     float threshold = cCloudShape.x;
     float alpha = smoothstep(threshold - cCloudShape.y, threshold + cCloudShape.y, density);
@@ -47,7 +52,7 @@ float4 main(float2 pixel : VPOS) : COLOR0
 
     float2 towardSun = cCloudToSun.xy / (abs(cCloudToSun.z) + cCloudPlace.w) * kSunReach;
     float sunSide = (tex2D(sCloudField, shaped + towardSun).r - body) * kSunSideShading;
-    float shade = saturate(thick + sunSide);
+    float shade = saturate(kShadeFloor + thick + sunSide + detail * kBillowShading * saturate(thick * 3));
     float3 colour = lerp(cCloudLit.rgb, cCloudDark.rgb, shade);
 
     float sunGlow = pow(saturate(dot(ray, cCloudToSun.xyz)), kSunGlowPower);

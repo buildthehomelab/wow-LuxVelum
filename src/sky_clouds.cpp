@@ -15,17 +15,19 @@ struct CoverKey
 constexpr CoverKey kCoverByWeight[] = {{0.0f, 0.0f},  {0.05f, 0.14f}, {0.15f, 0.35f}, {0.30f, 0.50f},
                                        {0.45f, 0.68f}, {0.60f, 0.82f}, {0.80f, 0.95f}, {0.90f, 1.0f}};
 
-constexpr float kEdgeSoftness = 0.05f;
-constexpr float kThickRange = 0.42f;
+constexpr float kEdgeSoftness = 0.085f;
+constexpr float kThinnestThickRange = 0.25f;
+constexpr float kThickestThickRange = 0.6f;
+constexpr float kThickRangePerCover = 0.8f;
 constexpr float kLightestOvercast = 0.15f;
 constexpr float kHeaviestOvercast = 0.8f;
-constexpr float kBellyAtLightestOvercast = 0.85f;
-constexpr float kBellyAtHeaviest[kOvercastPalettes] = {0.45f, 0.26f, 0.72f, 0.58f};
+constexpr float kBellyAtLightestOvercast = 0.72f;
+constexpr float kBellyAtHeaviest[kOvercastPalettes] = {0.42f, 0.28f, 0.72f, 0.58f};
 constexpr float kLitDimAtHeaviest[kOvercastPalettes] = {0.85f, 0.7f, 1.0f, 0.9f};
-constexpr float kSkyInCloud = 0.35f;
-constexpr float kAmbientInCloud = 0.45f;
-constexpr float kDirectInCloud = 0.55f;
-constexpr float kCloudGain = 1.25f;
+constexpr float kSkyInCloud = 0.5f;
+constexpr float kAmbientInCloud = 0.55f;
+constexpr float kDirectInCloud = 0.35f;
+constexpr float kCloudGain = 1.2f;
 constexpr float kWindAtHeaviest = 3.0f;
 
 constexpr uint32_t kBodyCells = 4;
@@ -204,7 +206,7 @@ CloudShape CloudShapeFor(const OvercastReading& reading, const CloudTuning& tuni
     shape.cover = std::max(CloudCoverOfWeight(reading.weight), std::clamp(tuning.fairCover, 0.0f, 1.0f));
     shape.threshold = 1.0f - shape.cover;
     shape.softness = kEdgeSoftness;
-    shape.thickRange = kThickRange;
+    shape.thickRange = std::clamp(shape.cover * kThickRangePerCover, kThinnestThickRange, kThickestThickRange);
     shape.opacity = std::clamp(tuning.opacity, 0.0f, 1.0f);
     return shape;
 }
@@ -226,8 +228,9 @@ CloudColours CloudColoursFor(const CloudLight& light, const OvercastReading& rea
         bellyAtHeaviest = kBellyAtLightestOvercast;
         litDimAtHeaviest = 1.0f;
     }
-    const float belly =
-        std::clamp(Mix(kBellyAtLightestOvercast, bellyAtHeaviest, heavy) / std::max(tuning.darkness, 0.01f), 0.0f, 1.0f);
+    const float belly = std::clamp(Mix(kBellyAtLightestOvercast, bellyAtHeaviest, heavy) /
+                                       std::max(tuning.darkness, 0.01f),
+                                   0.0f, 1.0f);
     const float litDim = Mix(1.0f, litDimAtHeaviest, heavy);
     CloudColours colours;
     for (int k = 0; k < 3; ++k)
@@ -261,8 +264,9 @@ std::vector<uint32_t> BuildCloudField(uint32_t size)
             const size_t at = static_cast<size_t>(y) * size + x;
             warpU[at] = LayeredNoise(u, v, kWarpCells, 3, kCommonGain, 400);
             warpV[at] = LayeredNoise(u, v, kWarpCells, 3, kCommonGain, 500);
-            body[at] = BodyAt(Wrapped(u + (warpU[at] - 0.5f) * kWarpReach), Wrapped(v + (warpV[at] - 0.5f) * kWarpReach));
-            detail[at] = 1.0f - std::fabs(2.0f * LayeredNoise(u, v, kDetailCells, 4, kFineGain, 600) - 1.0f);
+            body[at] =
+                BodyAt(Wrapped(u + (warpU[at] - 0.5f) * kWarpReach), Wrapped(v + (warpV[at] - 0.5f) * kWarpReach));
+            detail[at] = LayeredNoise(u, v, kDetailCells, 4, kFineGain, 600);
         }
     const std::vector<float> spreadBody = EvenlySpread(body);
     const std::vector<float> spreadDetail = EvenlySpread(detail);

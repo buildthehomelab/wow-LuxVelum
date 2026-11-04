@@ -288,7 +288,8 @@ bool DrawWeatherKind(Config& c, int kind)
 bool DrawStormClouds(Config& c)
 {
     bool changed = Toggle("Storm clouds", c.stormClouds,
-                          "Clouds that grow, merge and darken as an overcast builds toward a storm. Off: none from here");
+                          "Clouds that grow, merge and darken as an overcast builds toward a storm. Off: none from "
+                          "here");
     if (!c.stormClouds)
         return changed;
     changed |= Slider("Preview storm build-up", c.cloudPreviewWeight, 0.0f, 1.0f, "%.2f",

@@ -152,7 +152,8 @@ void CheckField()
     for (uint32_t y = 0; y < kCheckedFieldSize; ++y)
     {
         const int first = static_cast<int>(RedOf(field[static_cast<size_t>(y) * kCheckedFieldSize]));
-        const int last = static_cast<int>(RedOf(field[static_cast<size_t>(y) * kCheckedFieldSize + kCheckedFieldSize - 1]));
+        const size_t lastInRow = static_cast<size_t>(y) * kCheckedFieldSize + kCheckedFieldSize - 1;
+        const int last = static_cast<int>(RedOf(field[lastInRow]));
         const int nearby = static_cast<int>(RedOf(field[static_cast<size_t>(y) * kCheckedFieldSize + 1]));
         seamJump += std::abs(first - last);
         innerJump += std::abs(first - nearby);
