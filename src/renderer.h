@@ -112,7 +112,7 @@ private:
     void LogCloudCost(IDirect3DDevice9* dev, long long now);
     bool DrawCloudsWithClientStateSaved(IDirect3DDevice9* dev, const SceneDepth& depth, const SkyCloudInputs& in,
                                         const Config& cfg);
-    void DrawSkyClouds(IDirect3DDevice9* dev, const SkyCloudInputs& in, const Config& cfg,
+    void DrawSkyClouds(IDirect3DDevice9* dev, const SceneDepth& depth, const SkyCloudInputs& in, const Config& cfg,
                        const OvercastReading& overcast, const CloudShape& shape, const CloudTuning& tuning);
     FogParams DrawableFog(IDirect3DDevice9* dev, const FogParams& fog);
     void UploadLayerNoise(IDirect3DDevice9* dev, const FogParams& fog, const float* camera, long long now);
@@ -144,6 +144,7 @@ private:
     IDirect3DPixelShader9* m_rayComposite = nullptr;
     IDirect3DPixelShader9* m_probe = nullptr;
     IDirect3DPixelShader9* m_clouds = nullptr;
+    IDirect3DPixelShader9* m_cloudsLow = nullptr;
     IDirect3DVertexShader9* m_boltVs = nullptr;
     IDirect3DPixelShader9* m_boltPs = nullptr;
     IDirect3DVertexDeclaration9* m_boltDecl = nullptr;

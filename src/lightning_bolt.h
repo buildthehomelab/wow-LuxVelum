@@ -38,6 +38,7 @@ struct BoltCamera
     float viewToNdc[4];
     float pixelsPerNdc[2];
     float halfWidthPixels;
+    float depth;
 };
 
 float BoltAzimuthFacing(const float* forward, float seed, bool mustBeInView);

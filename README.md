@@ -259,19 +259,23 @@ alpha key scales its threshold by the same alpha (`0x81FF88`), so the shape stay
 a fade either: the client has three skybox slots (`0x7ED713`, first come, by skybox, any weight above 0), and a swap
 being taken away keeps its slot until its fade ends. So the clouds are a pass of their own: `sky_clouds` turns the
 overcast into a cover, and `vf_clouds` keeps the part of an evenly spread noise field above `1 - cover`, so a share of
-the sky is that share of the field and the clouds' edges move outward as the weight rises. The field is one tiling 512 x
-512 texture, made when the DLL loads and uploaded at first use, with its body in red, finer detail in green and a slow
-warp in blue and alpha.
+the sky is that share of the field and the clouds' edges move outward as the weight rises. The deck has depth: thick
+cloud hangs lower, and a short march (eight steps, five at `Quality=1`) along each view ray finds the surface it meets
+first, so billows overlap and catch light on their sides. Round billow noise shapes that surface, its slope lights it
+from the sun and from a strike, and two coarser mips darken the hollows and the heaviest masses. The field is one tiling
+512 x 512 texture, made when the DLL loads and uploaded at first use, with its body in red, finer detail in green and a
+slow warp in blue and alpha.
 
 The pass runs straight after the client's sky pass, from a hook on its one call site: `0x79ACBC E8` to `0x7F09B0`, a
 cdecl call the client skips when `[0xADF580]` is not above 0 (`0x79AC3F`) or `[0xCD8794]` says the camera is in liquid.
-Everything drawn later covers the clouds, so they need no depth test and leave no fringe around trees with
-multisampling. Drawn in that order, the fog, the god rays' scene copy and water reflections should see them; none of
-that has been watched in game. The client scissors its sky to the exterior it can see (`0x7F0AB9`) and returns early if
-`[0xD38CCC]` is 0. The pass honours the second but draws the whole viewport, so under an overcast it also spends time
-behind interiors. The view and projection come from the Gx state read there, as the opaque capture reads them at
-`0x4F911D`. The sky pass doesn't write them within three call levels; whether they match the opaque pass's on every
-frame isn't confirmed in game.
+The WDL's distant terrain is drawn before it (`0x79AC3A`), and the sky lies behind that by depth, so the pass tests
+depth too: a triangle at 0.99903, between the WDL's `[0.998, 0.999]` and the cleared 1. Everything drawn later covers
+the clouds, and with multisampling the test runs per sample. Drawn in that order, the fog, the god rays' scene copy and
+water reflections should see them; none of that has been watched in game. The client scissors its sky to the exterior it
+can see (`0x7F0AB9`) and returns early if `[0xD38CCC]` is 0. The pass honours the second but draws the whole viewport,
+so under an overcast it also spends time behind interiors. The view and projection come from the Gx state read there, as
+the opaque capture reads them at `0x4F911D`. The sky pass doesn't write them within three call levels; whether they
+match the opaque pass's on every frame isn't confirmed in game.
 
 How much cloud comes from the overcast the client is drawing. A swap list at `[0xD3901C]` (`0xD39018` entries, `0x18`
 apart, added by `0x7F10A0`, dropped at `0x7F1605`) holds for each swap the row it replaces at `+0x00`, a copy of the

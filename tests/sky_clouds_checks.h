@@ -125,6 +125,10 @@ void CheckCover()
     fair.fairCover = 0.3f;
     Check(Near(CloudShapeFor(none, fair).cover, 0.3f), "fair-weather cover draws under a clear sky");
     Check(Near(CloudShapeFor(none, fair).threshold, 0.7f), "the field is evenly spread, so 30% cover is the top 30%");
+    OvercastReading heavy;
+    heavy.weight = 0.8f;
+    Check(CloudShapeFor(none, fair).thickRange < CloudShapeFor(heavy, CloudTuning{}).thickRange,
+          "small clouds have a shallower relief scale, so they keep their shape");
 }
 
 void CheckColours()

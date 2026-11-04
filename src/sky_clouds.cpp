@@ -15,10 +15,9 @@ struct CoverKey
 constexpr CoverKey kCoverByWeight[] = {{0.0f, 0.0f},  {0.05f, 0.14f}, {0.15f, 0.35f}, {0.30f, 0.50f},
                                        {0.45f, 0.68f}, {0.60f, 0.82f}, {0.80f, 0.95f}, {0.90f, 1.0f}};
 
-constexpr float kEdgeSoftness = 0.085f;
-constexpr float kThinnestThickRange = 0.25f;
-constexpr float kThickestThickRange = 0.6f;
-constexpr float kThickRangePerCover = 0.8f;
+constexpr float kThinnestThickRange = 0.2f;
+constexpr float kThickestThickRange = 0.55f;
+constexpr float kThickRangePerCover = 0.6f;
 constexpr float kLightestOvercast = 0.15f;
 constexpr float kHeaviestOvercast = 0.8f;
 constexpr float kBellyAtLightestOvercast = 0.72f;
@@ -45,6 +44,8 @@ constexpr float kClusterShare = 0.30f;
 constexpr float kWarpReach = 0.12f;
 constexpr float kBodyGain = 0.6f;
 constexpr float kFineGain = 0.55f;
+constexpr float kBillowGain = 0.5f;
+constexpr int kBillowLayers = 4;
 constexpr float kCommonGain = 0.5f;
 
 float Mix(float a, float b, float t)
@@ -117,6 +118,55 @@ float BodyAt(float u, float v)
     return kBodyShare * LayeredNoise(u, v, kBodyCells, 3, kBodyGain, 100) +
            kFineShare * LayeredNoise(u, v, kFineCells, 4, kFineGain, 200) +
            kClusterShare * (LayeredNoise(u, v, kClusterCells, 2, kCommonGain, 300) - 0.5f);
+}
+
+float CellGradientDot(uint32_t x, uint32_t y, uint32_t seed, float dx, float dy)
+{
+    const float angle = LatticeValue(x, y, seed) * 6.2831853f;
+    return std::cos(angle) * dx + std::sin(angle) * dy;
+}
+
+float GradientNoise(float u, float v, uint32_t cells, uint32_t seed)
+{
+    const float x = u * cells;
+    const float y = v * cells;
+    const uint32_t x0 = static_cast<uint32_t>(x) % cells;
+    const uint32_t y0 = static_cast<uint32_t>(y) % cells;
+    const uint32_t x1 = (x0 + 1) % cells;
+    const uint32_t y1 = (y0 + 1) % cells;
+    const float dx = x - std::floor(x);
+    const float dy = y - std::floor(y);
+    const float fx = QuinticFade(dx);
+    const float fy = QuinticFade(dy);
+    return Mix(Mix(CellGradientDot(x0, y0, seed, dx, dy), CellGradientDot(x1, y0, seed, dx - 1.0f, dy), fx),
+               Mix(CellGradientDot(x0, y1, seed, dx, dy - 1.0f),
+                   CellGradientDot(x1, y1, seed, dx - 1.0f, dy - 1.0f), fx),
+               fy);
+}
+
+float BillowsAt(float u, float v, uint32_t cells, int layers, uint32_t seed)
+{
+    float total = 0.0f;
+    float amplitude = 1.0f;
+    float sum = 0.0f;
+    for (int layer = 0; layer < layers; ++layer)
+    {
+        total += amplitude * std::fabs(GradientNoise(u, v, cells << layer, seed + layer));
+        sum += amplitude;
+        amplitude *= kBillowGain;
+    }
+    return total / sum;
+}
+
+std::vector<float> NormalisedToRange(const std::vector<float>& values)
+{
+    const auto range = std::minmax_element(values.begin(), values.end());
+    const float low = *range.first;
+    const float span = std::max(*range.second - low, 1e-6f);
+    std::vector<float> normalised(values.size());
+    for (size_t i = 0; i < values.size(); ++i)
+        normalised[i] = (values[i] - low) / span;
+    return normalised;
 }
 
 std::vector<float> EvenlySpread(const std::vector<float>& values)
@@ -217,7 +267,6 @@ CloudShape CloudShapeFor(const OvercastReading& reading, const CloudTuning& tuni
     CloudShape shape;
     shape.cover = std::max(CloudCoverOfWeight(reading.weight), std::clamp(tuning.fairCover, 0.0f, 1.0f));
     shape.threshold = 1.0f - shape.cover;
-    shape.softness = kEdgeSoftness;
     shape.thickRange = std::clamp(shape.cover * kThickRangePerCover, kThinnestThickRange, kThickestThickRange);
     shape.opacity = std::clamp(tuning.opacity, 0.0f, 1.0f);
     return shape;
@@ -295,10 +344,10 @@ std::vector<uint32_t> BuildCloudField(uint32_t size)
             warpV[at] = LayeredNoise(u, v, kWarpCells, 3, kCommonGain, 500);
             body[at] =
                 BodyAt(Wrapped(u + (warpU[at] - 0.5f) * kWarpReach), Wrapped(v + (warpV[at] - 0.5f) * kWarpReach));
-            detail[at] = LayeredNoise(u, v, kDetailCells, 4, kFineGain, 600);
+            detail[at] = BillowsAt(u, v, kDetailCells, kBillowLayers, 600);
         }
     const std::vector<float> spreadBody = EvenlySpread(body);
-    const std::vector<float> spreadDetail = EvenlySpread(detail);
+    const std::vector<float> spreadDetail = NormalisedToRange(detail);
     const std::vector<float> spreadU = EvenlySpread(warpU);
     const std::vector<float> spreadV = EvenlySpread(warpV);
     std::vector<uint32_t> field(texels);

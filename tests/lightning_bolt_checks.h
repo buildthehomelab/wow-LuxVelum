@@ -89,7 +89,7 @@ void CheckRibbons()
 {
     const float lookingNorth[16] = {0.0f, 0.0f, 1.0f, 0.0f, -1.0f, 0.0f, 0.0f, 0.0f,
                                     0.0f, 1.0f, 0.0f, 0.0f, 0.0f,  0.0f, 0.0f, 1.0f};
-    BoltCamera camera = {lookingNorth, {1.0f, 1.0f, 0.0f, 0.0f}, {960.0f, 540.0f}, 10.0f};
+    BoltCamera camera = {lookingNorth, {1.0f, 1.0f, 0.0f, 0.0f}, {960.0f, 540.0f}, 10.0f, 0.75f};
     const LightningBolt ahead = BuildLightningBolt(kSeed, kFacingNorth, true);
     std::vector<BoltVertex> vertices;
     AddBoltRibbons(ahead, camera, vertices);
@@ -101,7 +101,8 @@ void CheckRibbons()
     bool widthRight = true;
     for (size_t i = 0; i + 1 < 6 * 64; i += 6)
     {
-        onScreen = onScreen && std::fabs(vertices[i].x) < 1.0f && vertices[i].y < 1.0f && vertices[i].w == 1.0f;
+        onScreen = onScreen && std::fabs(vertices[i].x) < 1.0f && vertices[i].y < 1.0f && vertices[i].w == 1.0f &&
+                              vertices[i].z == camera.depth;
         const float dx = (vertices[i + 1].x - vertices[i].x) * camera.pixelsPerNdc[0];
         const float dy = (vertices[i + 1].y - vertices[i].y) * camera.pixelsPerNdc[1];
         const float across = std::sqrt(dx * dx + dy * dy);

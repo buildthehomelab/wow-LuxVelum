@@ -172,10 +172,10 @@ void AddRibbon(const std::vector<BoltPoint>& points, const BoltCamera& camera, s
         offsetAt(i + 1, offsetB);
         const Projected& a = projected[i];
         const Projected& b = projected[i + 1];
-        const BoltVertex a0 = {a.x - offsetA[0], a.y - offsetA[1], 0.0f, 1.0f, -1.0f, points[i].brightness};
-        const BoltVertex a1 = {a.x + offsetA[0], a.y + offsetA[1], 0.0f, 1.0f, 1.0f, points[i].brightness};
-        const BoltVertex b0 = {b.x - offsetB[0], b.y - offsetB[1], 0.0f, 1.0f, -1.0f, points[i + 1].brightness};
-        const BoltVertex b1 = {b.x + offsetB[0], b.y + offsetB[1], 0.0f, 1.0f, 1.0f, points[i + 1].brightness};
+        const BoltVertex a0 = {a.x - offsetA[0], a.y - offsetA[1], camera.depth, 1.0f, -1.0f, points[i].brightness};
+        const BoltVertex a1 = {a.x + offsetA[0], a.y + offsetA[1], camera.depth, 1.0f, 1.0f, points[i].brightness};
+        const BoltVertex b0 = {b.x - offsetB[0], b.y - offsetB[1], camera.depth, 1.0f, -1.0f, points[i + 1].brightness};
+        const BoltVertex b1 = {b.x + offsetB[0], b.y + offsetB[1], camera.depth, 1.0f, 1.0f, points[i + 1].brightness};
         vertices.push_back(a0);
         vertices.push_back(a1);
         vertices.push_back(b0);

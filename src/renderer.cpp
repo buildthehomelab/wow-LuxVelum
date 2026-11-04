@@ -35,6 +35,7 @@
 #include "ps_noisy_split_composite_mid.h"
 #include "ps_bolt.h"
 #include "ps_clouds.h"
+#include "ps_clouds_low.h"
 #include "ps_probe.h"
 #include "ps_ray_blur.h"
 #include "ps_ray_composite.h"
@@ -76,9 +77,10 @@ constexpr UINT kCloudConstantsRegister = 80;
 constexpr double kCloudLongestDriftStep = 1.0;
 constexpr float kCloudDeckHeightYards = 1500.0f;
 constexpr float kCloudTileWidth = 6.0f;
-constexpr float kCloudCurvature = 0.12f;
+constexpr float kCloudCurvature = 0.25f;
 constexpr float kCloudSunGlow = 0.5f;
 constexpr float kCloudStrikeWander = 7.0f;
+constexpr float kBehindDistantLandDepth = 0.99903f;
 constexpr float kBoltHalfWidthPixelsAt1080 = 11.0f;
 constexpr float kReferenceScreenHeight = 1080.0f;
 constexpr float kBoltGain = 2.2f;
@@ -456,6 +458,7 @@ void Renderer::ReleaseAll()
     SafeRelease(m_rayComposite);
     SafeRelease(m_probe);
     SafeRelease(m_clouds);
+    SafeRelease(m_cloudsLow);
     SafeRelease(m_boltVs);
     SafeRelease(m_boltPs);
     SafeRelease(m_boltDecl);
@@ -1089,7 +1092,8 @@ void Renderer::DrawBolt(IDirect3DDevice9* dev, const SkyCloudInputs& in, const C
     const BoltCamera camera = {in.cameraRelativeView,
                                {proj[0], proj[5], proj[8], proj[9]},
                                {static_cast<float>(vp.Width) * 0.5f, static_cast<float>(vp.Height) * 0.5f},
-                               kBoltHalfWidthPixelsAt1080 * static_cast<float>(vp.Height) / kReferenceScreenHeight};
+                               kBoltHalfWidthPixelsAt1080 * static_cast<float>(vp.Height) / kReferenceScreenHeight,
+                               kBehindDistantLandDepth};
     m_boltVertices.clear();
     AddBoltRibbons(m_bolt, camera, m_boltVertices);
     if (m_boltVertices.empty())
@@ -1106,8 +1110,9 @@ void Renderer::DrawBolt(IDirect3DDevice9* dev, const SkyCloudInputs& in, const C
                          sizeof(BoltVertex));
 }
 
-void Renderer::DrawSkyClouds(IDirect3DDevice9* dev, const SkyCloudInputs& in, const Config& cfg,
-                             const OvercastReading& overcast, const CloudShape& shape, const CloudTuning& tuning)
+void Renderer::DrawSkyClouds(IDirect3DDevice9* dev, const SceneDepth& depth, const SkyCloudInputs& in,
+                             const Config& cfg, const OvercastReading& overcast, const CloudShape& shape,
+                             const CloudTuning& tuning)
 {
     float viewToWorld[16];
     if (!Invert4x4(in.cameraRelativeView, viewToWorld))
@@ -1143,7 +1148,7 @@ void Renderer::DrawSkyClouds(IDirect3DDevice9* dev, const SkyCloudInputs& in, co
     UpdateBolt(in, viewToWorld);
     const float boltGlow = m_bolt.visible && cfg.weatherBolts > 0.0f ? 1.0f : 0.0f;
     const Float4 constants[9] = {
-        {shape.threshold, shape.softness, shape.thickRange, 0.0f},
+        {shape.threshold, shape.thickRange, 0.0f, 0.0f},
         {static_cast<float>(m_cloudDrift.windU), static_cast<float>(m_cloudDrift.windV),
          static_cast<float>(m_cloudDrift.warpU), static_cast<float>(m_cloudDrift.warpV)},
         {static_cast<float>(std::fmod(in.camPos[0] / yardsPerTile, kCloudWindWrap)),
@@ -1161,8 +1166,14 @@ void Renderer::DrawSkyClouds(IDirect3DDevice9* dev, const SkyCloudInputs& in, co
     dev->SetPixelShaderConstantF(0, &common[0][0], 9);
     dev->SetPixelShaderConstantF(kCloudConstantsRegister, &constants[0].x, 9);
     const RECT world = ViewportRect(vp);
-    dev->SetViewport(&vp);
+    D3DVIEWPORT9 fullDepthRange = vp;
+    fullDepthRange.MinZ = 0.0f;
+    fullDepthRange.MaxZ = 1.0f;
+    dev->SetDepthStencilSurface(depth.bound);
+    dev->SetViewport(&fullDepthRange);
     dev->SetScissorRect(&world);
+    dev->SetRenderState(D3DRS_ZENABLE, D3DZB_TRUE);
+    dev->SetRenderState(D3DRS_ZFUNC, D3DCMP_LESS);
     dev->SetRenderState(D3DRS_SCISSORTESTENABLE, TRUE);
     dev->SetRenderState(D3DRS_ALPHABLENDENABLE, TRUE);
     dev->SetRenderState(D3DRS_SRCBLEND, D3DBLEND_SRCALPHA);
@@ -1177,10 +1188,10 @@ void Renderer::DrawSkyClouds(IDirect3DDevice9* dev, const SkyCloudInputs& in, co
     DWORD clientLodBias = 0;
     dev->GetSamplerState(0, D3DSAMP_MIPMAPLODBIAS, &clientLodBias);
     dev->SetSamplerState(0, D3DSAMP_MIPMAPLODBIAS, 0);
-    dev->SetPixelShader(m_clouds);
+    dev->SetPixelShader(cfg.quality <= 1 ? m_cloudsLow : m_clouds);
     if (LogEnabled(LogLevel::Info))
         m_cloudTimer.Begin(dev);
-    DrawFullscreenTriangle(dev);
+    DrawFullscreenTriangleAtDepth(dev, kBehindDistantLandDepth);
     dev->SetSamplerState(0, D3DSAMP_MIPMAPLODBIAS, clientLodBias);
     DrawBolt(dev, in, cfg);
     m_cloudTimer.End();
@@ -1188,7 +1199,10 @@ void Renderer::DrawSkyClouds(IDirect3DDevice9* dev, const SkyCloudInputs& in, co
 
 bool Renderer::EnsureCloudShader(IDirect3DDevice9* dev)
 {
-    return m_clouds || SUCCEEDED(dev->CreatePixelShader(reinterpret_cast<const DWORD*>(g_ps_clouds), &m_clouds));
+    if (!m_clouds && FAILED(dev->CreatePixelShader(reinterpret_cast<const DWORD*>(g_ps_clouds), &m_clouds)))
+        return false;
+    return m_cloudsLow ||
+           SUCCEEDED(dev->CreatePixelShader(reinterpret_cast<const DWORD*>(g_ps_clouds_low), &m_cloudsLow));
 }
 
 bool Renderer::DrawCloudsWithClientStateSaved(IDirect3DDevice9* dev, const SceneDepth& depth, const SkyCloudInputs& in,
@@ -1208,7 +1222,7 @@ bool Renderer::DrawCloudsWithClientStateSaved(IDirect3DDevice9* dev, const Scene
     if (!EnsureCloudShader(dev) || !EnsureCloudField(dev))
         return NotReady("cloud shader or noise field unavailable");
     return WithClientStateSaved(dev, depth, [&](IDirect3DSurface9*, const D3DSURFACE_DESC&) {
-        DrawSkyClouds(dev, in, cfg, overcast, shape, tuning);
+        DrawSkyClouds(dev, depth, in, cfg, overcast, shape, tuning);
         return true;
     });
 }
