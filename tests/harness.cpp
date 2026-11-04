@@ -1,3 +1,4 @@
+#include "lightning_bolt.h"
 #include "client_light_stay.h"
 #include "client_ripple_sprites.h"
 #include "config.h"
