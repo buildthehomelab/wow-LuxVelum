@@ -36,7 +36,9 @@ reverse-engineering evidence.
 ## Repository layout
 
 - `proxy/` — the optional `version.dll` loader that forwards to the system copy.
-- `src/` — `weather_director` (weather to look), `water_rain` (rain rings), `d3d9_wrap` (device wrapper, INTZ depth), `msaa_depth` (multisampled depth copy into INTZ: NVAPI, RESZ,
+- `src/` — `weather_director` (weather to look), `sky_clouds` (overcast to clouds, the noise field),
+  `lightning_bolt` (bolt shapes and their ribbons),
+  `water_rain` (rain rings), `d3d9_wrap` (device wrapper, INTZ depth), `msaa_depth` (multisampled depth copy into INTZ: NVAPI, RESZ,
   self-test), `hooks` (call-site thunks), `engine` (client addresses and frame inputs), `engine_actors` (unit walk
   for water contacts), `engine_lights` (point-light table walk, view-frustum test, ranked candidate pool),
   `local_light_stabiliser` (eight slots with hysteresis, fades and holds across captures), `client_code` (client
@@ -52,7 +54,8 @@ reverse-engineering evidence.
   (Forever glow byte before the fog composite, grading decisions at world done and frame end), `grading_renderer`
   (colour grading pass).
 - `shaders/` — the ps_3_0 passes: `vf_*` fog (march, temporal, composite and its multisampled silhouette split, god
-  rays and their late composite after an early one, depth probe and depth-copy check), `vw_*` water (FFT, ripple
+  rays and their late composite after an early one, depth probe and depth-copy check),
+  `vf_clouds` (storm clouds), `vf_bolt` (lightning bolts), `vw_*` water (FFT, ripple
   step, depth copy, shading) and `vp_grade` (colour grading).
 - `tests/harness.cpp` — the offline D3D9 harness; `--scene harbour` renders a logged in-game frame, `--scene ripples`
   units wading through the basin. `tests/shaders/` holds a copy of the client's M2 fog shader for the transparent fog

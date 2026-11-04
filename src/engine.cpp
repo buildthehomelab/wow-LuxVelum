@@ -79,7 +79,31 @@ constexpr size_t kMapWeatherTextureBytes = 260;
 constexpr uintptr_t kMapWeatherRainEffect = 0x13C;
 constexpr uintptr_t kMapWeatherSnowEffect = 0x140;
 constexpr uintptr_t kMapWeatherSandEffect = 0x144;
+constexpr uintptr_t kSkyPassEnabled = 0x00D38CCC;
+constexpr uintptr_t kPlaySoundFile = 0x004C9110;
+constexpr int kPlaySoundFileScriptChannel = 4;
+constexpr uintptr_t kFindCVar = 0x00767440;
+constexpr const char* kSoundEffectsCVar = "Sound_EnableSFX";
+constexpr const char* kAmbienceSoundCVar = "Sound_EnableAmbience";
+using FindCVarFunction = uintptr_t(__cdecl*)(const char* name);
+using PlaySoundFileFunction = int(__cdecl*)(const char* file, int channel);
+constexpr const char* kThunderClipFiles[kThunderClips] = {
+    "Sound\\Ambience\\Weather\\ThunderNear01.mp3",   "Sound\\Ambience\\Weather\\ThunderNear02.mp3",
+    "Sound\\Ambience\\Weather\\ThunderNear03.mp3",   "Sound\\Ambience\\Weather\\ThunderNear04.mp3",
+    "Sound\\Ambience\\Weather\\ThunderMiddle01.mp3", "Sound\\Ambience\\Weather\\ThunderMiddle02.mp3",
+    "Sound\\Ambience\\Weather\\ThunderMiddle03.mp3", "Sound\\Ambience\\Weather\\ThunderFar01.mp3",
+    "Sound\\Ambience\\Weather\\ThunderFar02.mp3",    "Sound\\Ambience\\Weather\\ThunderFar03.mp3",
+    "Sound\\Ambience\\Weather\\ThunderFar04.mp3",
+};
+constexpr uintptr_t kLightSwapCount = 0x00D39018;
+constexpr uintptr_t kLightSwapEntries = 0x00D3901C;
+constexpr uintptr_t kLightSwapStride = 0x18;
+constexpr uintptr_t kLightSwapAreaLight = 0x00;
+constexpr uintptr_t kLightSwapLightCopy = 0x04;
+constexpr uintptr_t kLightSwapFade = 0x08;
+constexpr uint32_t kMostLightSwapsRead = 4096;
 
+constexpr int kSkyMiddleColorIndex = 1;
 constexpr uintptr_t kLightSkyColors[kSkyColorCount] = {0x00D38BE0, 0x00D38BE4, 0x00D38BE8,
                                                        0x00D38BEC, 0x00D38BF0, 0x00D38BF4};
 constexpr uintptr_t kLightRiverColors[kWaterColorPair] = {0x00D38C14, 0x00D38C18};
@@ -111,6 +135,12 @@ struct CodeBytes
     size_t size;
     unsigned char bytes[kMaxCodeBytes];
 };
+
+constexpr CodeBytes kPlaySoundFileCode = {
+    "PlaySoundFile entry", kPlaySoundFile, 13,
+    {0x55, 0x8B, 0xEC, 0x51, 0xF6, 0x05, 0x20, 0xAD, 0xB4, 0x00, 0x01, 0x75, 0x1B}};
+
+constexpr CodeBytes kFindCVarCode = {"cvar lookup entry", kFindCVar, 3, {0x55, 0x8B, 0xEC}};
 
 const CodeBytes kLightRecordStores[] = {
     {"light record copy destination", 0x007F3574, 5, {0xB9, 0xD4, 0x8B, 0xD3, 0x00}},
@@ -397,6 +427,44 @@ WeatherReading ReadClientWeather()
     return reading;
 }
 
+OvercastReading g_overcast;
+bool g_strikeRequested = false;
+
+OvercastReading ReadClientOvercast()
+{
+    OvercastReading reading;
+    const uintptr_t entries = Read<uintptr_t>(kLightSwapEntries);
+    if (!entries)
+        return reading;
+    const uint32_t count = std::min(Read<uint32_t>(kLightSwapCount), kMostLightSwapsRead);
+    for (uint32_t i = 0; i < count; ++i)
+    {
+        const uintptr_t entry = entries + i * kLightSwapStride;
+        const uintptr_t lightCopy = Read<uintptr_t>(entry + kLightSwapLightCopy);
+        if (lightCopy)
+            AddLightSwapToOvercast(reading, Read<uint32_t>(entry + kLightSwapAreaLight), Read<uint32_t>(lightCopy),
+                                   Read<float>(entry + kLightSwapFade));
+    }
+    FinishOvercast(reading);
+    return reading;
+}
+
+bool CodeBytesMatch(const CodeBytes& code);
+
+bool ClientCVarOn(const char* name)
+{
+    const uintptr_t cvar = reinterpret_cast<FindCVarFunction>(kFindCVar)(name);
+    return !cvar || Read<int32_t>(cvar + kCVarIntValue) != 0;
+}
+
+void PlayThunderClip(int clip)
+{
+    static const bool clientMatches = CodeBytesMatch(kPlaySoundFileCode) && CodeBytesMatch(kFindCVarCode);
+    if (clientMatches && clip >= 0 && clip < kThunderClips && ClientCVarOn(kSoundEffectsCVar) &&
+        ClientCVarOn(kAmbienceSoundCVar))
+        reinterpret_cast<PlaySoundFileFunction>(kPlaySoundFile)(kThunderClipFiles[clip], kPlaySoundFileScriptChannel);
+}
+
 void StepWeatherLook(const Config& cfg)
 {
     static WeatherDirector director;
@@ -404,15 +472,24 @@ void StepWeatherLook(const Config& cfg)
     {
         g_weatherReading = {};
         g_weatherLook = {};
+        g_strikeRequested = false;
         return;
     }
-    const WeatherReading reading = ReadClientWeather();
+    WeatherReading reading = ReadClientWeather();
+    g_overcast = ReadClientOvercast();
+    const OvercastReading overcast = OvercastWithPreview(g_overcast, CloudTuningFrom(cfg));
+    reading.overcastWeight = overcast.weight;
+    reading.thunderOvercast = overcast.weight * overcast.share[kOvercastStorm];
+    reading.strikeRequested = g_strikeRequested;
+    g_strikeRequested = false;
     if (WeatherKindOf(reading.type, reading.intensity, reading.ash) !=
         WeatherKindOf(g_weatherReading.type, g_weatherReading.intensity, g_weatherReading.ash))
         VF_LOG_INFO("weather: client type %d%s, intensity %.2f", reading.type, reading.ash ? " (ash)" : "",
                     reading.intensity);
     g_weatherReading = reading;
     g_weatherLook = director.Step(reading, WeatherTuningFrom(cfg), ClockSeconds());
+    if (cfg.weatherThunder && g_weatherLook.thunderClip != kNoThunderClip)
+        PlayThunderClip(g_weatherLook.thunderClip);
 }
 
 LightParamsSelection ReadLightParamsSelection()
@@ -464,6 +541,23 @@ LocalLightCamera FrameLightCamera(const FrameInputs& in)
     return camera;
 }
 
+bool ReadToLight(float* toLight)
+{
+    const float dayFraction = Read<float>(kDayFraction);
+    const float dayStart = Read<float>(kSunDayStart);
+    const float dayEnd = Read<float>(kSunDayEnd);
+    const bool moon = !(dayFraction >= dayStart && dayFraction <= dayEnd);
+    float center[3];
+    float body[3];
+    ReadFloats(kSkyCenter, center, 3);
+    ReadFloats(moon ? kMoonPosition : kSunPosition, body, 3);
+    toLight[0] = body[0] - center[0];
+    toLight[1] = body[1] - center[1];
+    toLight[2] = body[2] - center[2];
+    Normalize(toLight);
+    return moon;
+}
+
 bool BuildFrameInputsUnsafe(FrameInputs& out, bool withPointLights, const PointLightUpload& upload)
 {
     std::memcpy(out.cameraRelativeView, g_opaque.cameraRelativeView, sizeof(out.cameraRelativeView));
@@ -473,17 +567,7 @@ bool BuildFrameInputsUnsafe(FrameInputs& out, bool withPointLights, const PointL
     ReadFloats(kCameraTarget, out.camTarget, 3);
 
     out.dayFraction = Read<float>(kDayFraction);
-    float dayStart = Read<float>(kSunDayStart);
-    float dayEnd = Read<float>(kSunDayEnd);
-    out.lightIsMoon = !(out.dayFraction >= dayStart && out.dayFraction <= dayEnd);
-    float center[3];
-    float body[3];
-    ReadFloats(kSkyCenter, center, 3);
-    ReadFloats(out.lightIsMoon ? kMoonPosition : kSunPosition, body, 3);
-    out.toLight[0] = body[0] - center[0];
-    out.toLight[1] = body[1] - center[1];
-    out.toLight[2] = body[2] - center[2];
-    Normalize(out.toLight);
+    out.lightIsMoon = ReadToLight(out.toLight);
 
     out.fogColor = Read<uint32_t>(kFogColor);
     out.fogStart = Read<float>(kFogGroupStart[kFrameInputsFogGroup]);
@@ -495,6 +579,7 @@ bool BuildFrameInputsUnsafe(FrameInputs& out, bool withPointLights, const PointL
     out.mapId = Read<int32_t>(kCurrentMap);
     out.lightParams = ReadLightParamsSelection();
     out.weather = g_weatherLook;
+    g_overcast = ReadClientOvercast();
     const LocalLightCamera lightCamera = FrameLightCamera(out);
     CaptureLocalLightInputs(lightCamera, withPointLights, upload, out.localLights);
     if (withPointLights)
@@ -1003,6 +1088,45 @@ WeatherReading LastWeatherReading()
 WeatherLook LastWeatherLook()
 {
     return g_weatherLook;
+}
+
+void RequestLightningStrike()
+{
+    g_strikeRequested = true;
+}
+
+OvercastReading LastOvercast()
+{
+    return g_overcast;
+}
+
+bool BuildSkyCloudInputs(IDirect3DDevice9* device, SkyCloudInputs& out)
+{
+    __try
+    {
+        OpaqueState state = {};
+        if (!Read<uint32_t>(kSkyPassEnabled) || !CaptureOpaqueStateUnsafe(device, state))
+            return false;
+        std::memcpy(out.cameraRelativeView, state.cameraRelativeView, sizeof(out.cameraRelativeView));
+        std::memcpy(out.glProjection, state.glProjection, sizeof(out.glProjection));
+        out.viewport = state.viewport;
+        ReadFloats(kCameraPosition, out.camPos, 3);
+        ReadToLight(out.toLight);
+        out.sunColor = Read<uint32_t>(kSunColor);
+        out.directColor = Read<uint32_t>(kDirectColor);
+        out.ambientColor = Read<uint32_t>(kAmbientColor);
+        out.skyMiddleColor = Read<uint32_t>(kLightSkyColors[kSkyMiddleColorIndex]);
+        g_overcast = ReadClientOvercast();
+        out.overcast = g_overcast;
+        out.flash = g_weatherLook.flash;
+        out.strikeSeed = g_weatherLook.strikeSeed;
+        out.strikeAsked = g_weatherLook.strikeAsked;
+        return true;
+    }
+    __except (EXCEPTION_EXECUTE_HANDLER)
+    {
+        return false;
+    }
 }
 
 bool BuildFrameInputs(FrameInputs& out, bool withPointLights, const PointLightUpload& upload)

@@ -10,6 +10,16 @@ inline constexpr float kFullscreenTriangle[3][4] = {
     {kFullscreenTriangleHigh, kFullscreenTriangleLow, 0.0f, 1.0f},
 };
 
+inline HRESULT DrawFullscreenTriangleAtDepth(IDirect3DDevice9* dev, float depth)
+{
+    const float triangle[3][4] = {
+        {kFullscreenTriangleLow, kFullscreenTriangleLow, depth, 1.0f},
+        {kFullscreenTriangleLow, kFullscreenTriangleHigh, depth, 1.0f},
+        {kFullscreenTriangleHigh, kFullscreenTriangleLow, depth, 1.0f},
+    };
+    return dev->DrawPrimitiveUP(D3DPT_TRIANGLELIST, 1, triangle, sizeof(triangle[0]));
+}
+
 inline HRESULT DrawFullscreenTriangle(IDirect3DDevice9* dev)
 {
     return dev->DrawPrimitiveUP(D3DPT_TRIANGLELIST, 1, kFullscreenTriangle, sizeof(kFullscreenTriangle[0]));

@@ -45,6 +45,7 @@ constexpr double kPercent = 100.0;
 
 uintptr_t g_worldRenderTarget = engine::kWorldRenderTarget;
 uintptr_t g_opaqueM2PassTarget = engine::kOpaqueM2PassTarget;
+uintptr_t g_skyPassTarget = engine::kSkyPassTarget;
 uintptr_t g_liquidSurfaceTarget = engine::kLiquidSurfaceTarget;
 FogDevice* g_liquidDepthWriteDevice = nullptr;
 uintptr_t g_screenEffectsTarget = engine::kScreenEffectsTarget;
@@ -58,6 +59,7 @@ DWORD g_lastReload = 0;
 const char* g_fogNotDrawnReason = "";
 StatusLog g_fogLog;
 StatusLog g_godRayLog;
+StatusLog g_skyCloudLog;
 
 uintptr_t g_m2BatchFogTarget = engine::kM2BatchFogTarget;
 uintptr_t g_glarePassTarget = engine::kGlarePassTarget;
@@ -1217,6 +1219,39 @@ extern "C" void __cdecl vf_on_m2_batch_fog(M2BatchFogArgs* args)
     }
 }
 
+void OnSkyDone()
+{
+    const Config& cfg = GlobalConfig().Get();
+    if (g_failed || !cfg.stormClouds)
+        return;
+    FogDevice* const device = g_worldClient->device();
+    if (!device)
+        return;
+    SkyCloudInputs in;
+    const char* skip = "no sky cloud inputs";
+    const bool drawn = engine::BuildSkyCloudInputs(RealDevice(device), in) && RenderSkyClouds(device, in, cfg, &skip);
+    if (drawn)
+    {
+        g_skyCloudLog.Drawn();
+        return;
+    }
+    const StatusLogLine line = g_skyCloudLog.Skip(skip);
+    if (line.write)
+        LogWrite(line.level, "storm clouds skipped: %s", skip);
+}
+
+extern "C" void __cdecl vf_on_sky_done()
+{
+    __try
+    {
+        OnSkyDone();
+    }
+    __except (GuardFilter(GetExceptionCode(), "sky hook"))
+    {
+        g_failed = true;
+    }
+}
+
 extern "C" void __cdecl vf_on_opaque_done()
 {
     __try
@@ -1251,6 +1286,19 @@ __declspec(naked) static void WorldRenderThunk()
         call dword ptr [g_worldRenderTarget]
         pushad
         call vf_on_frame_end
+        popad
+        ret
+    }
+}
+
+__declspec(naked) static void SkyPassThunk()
+{
+    __asm {
+        push dword ptr [esp + 4]
+        call dword ptr [g_skyPassTarget]
+        add esp, 4
+        pushad
+        call vf_on_sky_done
         popad
         ret
     }
@@ -1602,6 +1650,18 @@ FogFrameStatus LastFogFrameStatus()
     if (g_renderedLastFrame)
         return {true, ""};
     return {false, *g_fogNotDrawnReason ? g_fogNotDrawnReason : "waiting for the world to render"};
+}
+
+void InstallSkyCloudHook()
+{
+    if (!SiteMatches(engine::kSkyPassSite, engine::kSkyPassTarget))
+    {
+        VF_LOG_ERROR("sky pass call site 0x%08X differs from the 12340 client; no storm clouds",
+                     static_cast<unsigned>(engine::kSkyPassSite));
+        return;
+    }
+    if (PatchCallSite(engine::kSkyPassSite, engine::kSkyPassTarget, reinterpret_cast<const void*>(&SkyPassThunk)))
+        VF_LOG_INFO("sky pass hook installed at 0x%08X", static_cast<unsigned>(engine::kSkyPassSite));
 }
 
 void InstallFarClipHooks()

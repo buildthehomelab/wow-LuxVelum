@@ -5,6 +5,7 @@
 
 #include <cmath>
 #include <cstdio>
+#include <algorithm>
 #include <limits>
 
 namespace weather_director_checks
@@ -330,7 +331,7 @@ void CheckLightning()
         lit = flashing;
     }
     std::printf("     lightning: %d strikes in 5 minutes of storm\n", strikes);
-    Check(strikes >= 8 && strikes <= 40, "a storm strikes every 8 to 35 seconds");
+    Check(strikes >= 8 && strikes <= 40, "without an overcast, heavy rain strikes every 8 to 35 seconds");
 
     WeatherDirector drizzle;
     heavy.intensity = 0.4f;
@@ -339,7 +340,176 @@ void CheckLightning()
         anyFlash = anyFlash || drizzle.Step(heavy, tuning, kStart + frame * kFrame).flash > 0.0f;
     Check(!anyFlash, "light rain has no lightning");
 
+    const auto strikesIn = [&](WeatherReading reading) {
+        WeatherDirector director;
+        int seen = 0;
+        bool wasLit = false;
+        for (int frame = 0; frame < kFrames; ++frame)
+        {
+            const bool flashing = director.Step(reading, tuning, kStart + frame * kFrame).flash > 0.3f;
+            if (flashing && !wasLit)
+                ++seen;
+            wasLit = flashing;
+        }
+        return seen;
+    };
+    WeatherReading thunderOverSand;
+    thunderOverSand.type = kClientWeatherSand;
+    thunderOverSand.intensity = 0.5f;
+    thunderOverSand.overcastWeight = 0.8f;
+    thunderOverSand.thunderOvercast = 0.8f;
+    Check(strikesIn(thunderOverSand) >= 8, "the thunder palette strikes whatever is falling, as in Tanaris");
+    WeatherReading thunderOnly;
+    thunderOnly.overcastWeight = 0.8f;
+    thunderOnly.thunderOvercast = 0.8f;
+    Check(strikesIn(thunderOnly) >= 8, "an overcast shown with no weather packet still strikes");
+    WeatherReading heavyRainOvercast;
+    heavyRainOvercast.type = kClientWeatherRain;
+    heavyRainOvercast.intensity = 1.0f;
+    heavyRainOvercast.overcastWeight = 0.8f;
+    Check(strikesIn(heavyRainOvercast) == 0, "heavy rain under the rain palette has no lightning");
+    WeatherReading faintThunder = thunderOnly;
+    faintThunder.overcastWeight = 0.2f;
+    faintThunder.thunderOvercast = 0.2f;
+    Check(strikesIn(faintThunder) == 0, "a faint storm palette has no lightning");
+    WeatherReading ash = thunderOnly;
+    ash.ash = true;
+    Check(strikesIn(ash) == 0, "falling ash shares the storm palette but has no lightning");
+
+    WeatherDirector afterAsh;
+    WeatherReading ashEnding = ash;
+    double clock = kStart;
+    for (int frame = 0; frame < 300; ++frame, clock += kFrame)
+        afterAsh.Step(ashEnding, tuning, clock);
+    ashEnding.ash = false;
+    bool flashedAfterAsh = false;
+    for (int frame = 0; frame < 300; ++frame, clock += kFrame)
+        flashedAfterAsh = flashedAfterAsh || afterAsh.Step(ashEnding, tuning, clock).flash > 0.0f;
+    Check(!flashedAfterAsh, "the storm palette fading out after ash has no lightning");
+
+    WeatherDirector flapping;
+    double lastStrike = -1000.0;
+    double shortestGap = 1000.0;
+    float seedBefore = 0.0f;
+    for (int frame = 0; frame < kFrames; ++frame)
+    {
+        WeatherReading flapped = thunderOnly;
+        flapped.thunderOvercast = (frame / 15) % 2 ? 0.41f : 0.39f;
+        const double now = kStart + frame * kFrame;
+        const float seedNow = flapping.Step(flapped, tuning, now).strikeSeed;
+        if (seedNow != seedBefore)
+        {
+            shortestGap = std::min(shortestGap, now - lastStrike);
+            lastStrike = now;
+        }
+        seedBefore = seedNow;
+    }
+    Check(shortestGap >= 7.9, "a storm at the edge of the threshold keeps strikes at least 8 seconds apart");
+
+    WeatherDirector seeded;
+    float seedDuringFlash = -1.0f;
+    bool seedHeld = true;
+    float firstSeed = -1.0f;
+    bool seedMoved = false;
+    for (int frame = 0; frame < kFrames; ++frame)
+    {
+        const WeatherLook look = seeded.Step(thunderOnly, tuning, kStart + frame * kFrame);
+        if (look.flash > 0.0f)
+        {
+            seedHeld = seedHeld && (seedDuringFlash < 0.0f || look.strikeSeed == seedDuringFlash);
+            seedDuringFlash = look.strikeSeed;
+            firstSeed = firstSeed < 0.0f ? look.strikeSeed : firstSeed;
+            seedMoved = seedMoved || look.strikeSeed != firstSeed;
+        }
+        else
+            seedDuringFlash = -1.0f;
+    }
+    Check(seedHeld, "a strike's place holds while it flashes");
+    Check(seedMoved, "each strike lights another place");
+
+    WeatherDirector asked;
+    WeatherReading clearSky;
+    asked.Step(clearSky, tuning, kStart);
+    WeatherReading button = clearSky;
+    button.strikeRequested = true;
+    asked.Step(button, tuning, kStart + kFrame);
+    const WeatherLook struck = asked.Step(clearSky, tuning, kStart + 2 * kFrame);
+    Check(struck.flash > 0.5f && struck.strikeAsked, "a strike asked for fires at once, even under a clear sky");
+
+    WeatherDirector stormy;
+    bool naturalStrikeTooSoon = false;
+    for (int press = 0; press < 40; ++press)
+    {
+        double now = kStart + 1000.0 * press;
+        for (int frame = 0; frame < 30 * (20 + press); ++frame, now += kFrame)
+            stormy.Step(thunderOnly, tuning, now);
+        WeatherReading pressed = thunderOnly;
+        pressed.strikeRequested = true;
+        const float pressedSeed = stormy.Step(pressed, tuning, now).strikeSeed;
+        for (int frame = 1; frame < 30 * 8 - 1; ++frame)
+        {
+            const WeatherLook later = stormy.Step(thunderOnly, tuning, now + frame * kFrame);
+            naturalStrikeTooSoon = naturalStrikeTooSoon || later.strikeSeed != pressedSeed;
+        }
+    }
+    Check(!naturalStrikeTooSoon, "a storm's own strikes wait 8 seconds after a strike asked for");
+
+    WeatherDirector rumbling;
+    int thunders = 0;
+    int thunderStrikes = 0;
+    float thunderSeed = 0.0f;
+    double strikeTime = 0.0;
+    double longestDelay = 0.0;
+    bool clipsInRange = true;
+    for (int frame = 0; frame < kFrames; ++frame)
+    {
+        const double now = kStart + frame * kFrame;
+        const WeatherLook look = rumbling.Step(thunderOnly, tuning, now);
+        if (look.strikeSeed != thunderSeed)
+        {
+            thunderSeed = look.strikeSeed;
+            strikeTime = now;
+            ++thunderStrikes;
+        }
+        if (look.thunderClip != kNoThunderClip)
+        {
+            ++thunders;
+            longestDelay = std::max(longestDelay, now - strikeTime);
+            clipsInRange = clipsInRange && look.thunderClip >= 0 && look.thunderClip < kThunderClips;
+        }
+    }
+    Check(thunders >= thunderStrikes - 1 && thunders <= thunderStrikes, "every strike is followed by one thunder");
+    Check(longestDelay <= 6.1, "thunder follows within 6 seconds");
+    Check(clipsInRange, "thunder names a clip that exists");
+
+    WeatherDirector askedThunder;
+    WeatherReading quiet;
+    askedThunder.Step(button, tuning, kStart);
+    double askedHeardAfter = -1.0;
+    for (int frame = 1; frame < 60 && askedHeardAfter < 0.0; ++frame)
+        if (askedThunder.Step(quiet, tuning, kStart + frame * kFrame).thunderClip != kNoThunderClip)
+            askedHeardAfter = frame * kFrame;
+    Check(askedHeardAfter >= 0.1 && askedHeardAfter <= 0.9,
+          "a strike asked for is close, so it's heard almost at once");
+
+    WeatherDirector lateThunder;
+    lateThunder.Step(button, tuning, kStart);
+    Check(lateThunder.Step(quiet, tuning, kStart + 300.0).thunderClip == kNoThunderClip,
+          "a clip that comes up minutes late is dropped");
+    WeatherDirector movedMap;
+    WeatherReading elsewhere = quiet;
+    movedMap.Step(button, tuning, kStart);
+    elsewhere.mapId = quiet.mapId + 1;
+    bool heardElsewhere = false;
+    for (int frame = 1; frame < 60; ++frame)
+        heardElsewhere = heardElsewhere ||
+                         movedMap.Step(elsewhere, tuning, kStart + frame * kFrame).thunderClip != kNoThunderClip;
+    Check(!heardElsewhere, "thunder doesn't follow the player to another map");
+
     tuning.lightning = 0.0f;
+    WeatherDirector askedWhenOff;
+    askedWhenOff.Step(button, tuning, kStart);
+    Check(askedWhenOff.Step(clearSky, tuning, kStart + kFrame).flash == 0.0f, "lightning at 0 ignores the button too");
     WeatherDirector off;
     heavy.intensity = 1.0f;
     anyFlash = false;

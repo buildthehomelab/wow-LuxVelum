@@ -60,8 +60,10 @@ This fork ([Raz0r1337/coa-vfog](https://github.com/Raz0r1337/coa-vfog), developm
 - **Authored noise**: drifting fog banks where the Classic layers carry the modern client's noise, mostly in
   storms (`ClassicNoise`).
 - **Weather**: rain, snow, sand and fog bring in each area's storm fog and change the sun, god rays, mist and water,
-  with mist and rays through the clearing after rain, rain rings on water, lightning in heavy rain and dawn mist
+  with mist and rays through the clearing after rain, rain rings on water, lightning in a thunderstorm and dawn mist
   (`WeatherEffects`, and the Weather section of the settings window).
+- **Storm clouds**: clouds in the sky that grow, merge and darken as an overcast builds toward a storm (`StormClouds`).
+- **Lightning bolts**: bolts fork down from the clouds behind the land in a thunderstorm (`WeatherBolts`).
 - **Density variation**: a two-octave field anchored in world space modulates the scene layers around their
   authored mean and drifts along world +X; the distance fog stays smooth so it cannot uncover the far clip. This
   is an artistic control, not a reconstruction of Classic's authored noise.
@@ -252,10 +254,76 @@ resets the temporal history. Wet ground belongs to the place: it fades 150 to 50
 map change dries it. With `ForeverGlow` or `ColorGrading` on, the storm slot's glow and grading now apply too. All of the
 client reads come from the code, and how any of this looks isn't confirmed in game.
 
+**Storm clouds.** A skybox model can't grow: its alpha is the light's weight, every unit scales with it alike, and the
+alpha key scales its threshold by the same alpha (`0x81FF88`), so the shape stays. A second model can't take over during
+a fade either: the client has three skybox slots (`0x7ED713`, first come, by skybox, any weight above 0), and a swap
+being taken away keeps its slot until its fade ends. So the clouds are a pass of their own: `sky_clouds` turns the
+overcast into a cover, and `vf_clouds` keeps the part of an evenly spread noise field above `1 - cover`, so a share of
+the sky is that share of the field and the clouds' edges move outward as the weight rises. From a cover of 0.8 the
+threshold is pulled lower still, by up to 0.2, because billows would otherwise leave gaps in a full storm. The deck has
+depth: thick cloud hangs lower, and a short march (eight steps, five at `Quality=1`) along each view ray finds the
+surface it meets first, so billows overlap and catch light on their sides. Round billow noise shapes that surface, its
+slope lights it from the sun and from a strike, and two coarser mips darken the hollows and the heaviest masses. The
+field is one tiling 512 x 512 texture, made when the DLL loads and uploaded at first use, with its body in red, finer
+detail in green and a slow warp in blue and alpha.
+
+The pass runs straight after the client's sky pass, from a hook on its one call site: `0x79ACBC E8` to `0x7F09B0`, a
+cdecl call the client skips when `[0xADF580]` is not above 0 (`0x79AC3F`) or `[0xCD8794]` says the camera is in liquid.
+The WDL's distant terrain is drawn before it (`0x79AC3A`), and the sky lies behind that by depth, so the pass tests
+depth too: a triangle at 0.99903, between the WDL's `[0.998, 0.999]` and the cleared 1. Everything drawn later covers
+the clouds, and with multisampling the test runs per sample. Drawn in that order, the fog, the god rays' scene copy and
+water reflections should see them; none of that has been watched in game. The client scissors its sky to the exterior it
+can see (`0x7F0AB9`) and returns early if `[0xD38CCC]` is 0. The pass honours the second but draws the whole viewport,
+so under an overcast it also spends time behind interiors. The view and projection come from the Gx state read there, as
+the opaque capture reads them at `0x4F911D`. The sky pass doesn't write them within three call levels; whether they
+match the opaque pass's on every frame isn't confirmed in game.
+
+How much cloud comes from the overcast the client is drawing. A swap list at `[0xD3901C]` (`0xD39018` entries, `0x18`
+apart, added by `0x7F10A0`, dropped at `0x7F1605`) holds for each swap the row it replaces at `+0x00`, a copy of the
+Light row it draws at `+0x04` whose first field is that row's ID, and its fade, 0 to 1, at `+0x08` (`0x7F1500`).
+mod-weather's overcast replaces the rows 8901 to 8918 (weights 0.05 to 0.90) with the palettes 8951 rain, 8952 storm,
+8953 snow and 8954 sand, each plus 10000 per night brightness level copy. The weight adds up row weight times fade, in
+list order, so a fade between two steps or two palettes stays smooth. It isn't quite the client's own weight, `min(row
+weight, fade)` for each swap (`0x7EE66C`), which bumps partway through a fade. A night level's base swap, on rows 9001
+to 9005, covers what's before it by its fade, as it does in the client's blend: mod-night-brightness leaves the overcast
+of the layer below on the list when a player raises their level during weather. This is the only place the client tells
+thunder from heavy rain: its weather object keeps a type of 0 to 3 (`0x7846A0`). Anything else on the list is ignored,
+so without those rows there are no clouds.
+
+The colours come from the light the client has just blended (`0xD38BD4` ambient, `0xD38BD8` direct, `0xD38BE4` middle
+sky), so they follow the zone, the hour, the dark nights, each night brightness level and the overcast's own palette,
+with the thick parts darker the heavier the overcast and darkest under thunder. Lightning uses the director's flash,
+each strike lighting another part of the deck. The clouds move with the wind at 20 degrees, up to three times as fast at
+a heavy overcast, and shift with the camera as a deck 1,500 yards up.
+
+`CloudFairCover` draws them under a clear sky too, to try them as the only clouds. `0xD38C28` is the client's blended
+cloud density (`0x7F056A`) if they ever take that over per zone. None of the look is confirmed in game; the checks cover
+the overcast reading, the cover, the colours' order and the field.
+
+**Lightning bolts.** Three strikes in four draw a bolt; the rest only light up the clouds. A strike's seed picks the
+shape: a channel jagged by midpoint displacement, from 16 to 32 degrees up to below the horizon, fading out at its foot,
+with two to six branches that fade to their tips. Most land within 45 degrees of where the camera looks when they
+strike, and the bolt then stays at that place in the sky. It is drawn right after the clouds, in the same pass and added
+to them, as ribbons a fixed number of pixels wide, so the land, trees and buildings drawn later cover it where they rise
+above that part of the sky, and the bolt lights the clouds around its top. Its brightness follows the strike's flash,
+two strokes included, so `WeatherLightning` at 0 also stops bolts. None of this is seen in game yet. **Strike now** in
+the settings window fires one at once, ahead of the camera, whatever the weather. It needs `WeatherEffects` on and
+`WeatherLightning` above 0, and bolts need the cloud pass, so a sky with no clouds has flashes only.
+
+**Thunder.** Each strike schedules one clip: near (a quarter, 0.2 to 0.8 s after the flash), middle (about a third, 1 to
+2.5 s) or far (the rest, 3 to 6 s), and **Strike now** is always near. The DLL calls the client's `PlaySoundFile`
+function (`0x4C9110`, as `0x9859EF` does, with the file and channel 4), checked against the 12340 bytes first. That
+function's channel 4 (`SCRIPTSOUND`) follows the master volume and `Sound_EnableAllSound`, not the effects volume, and
+it is the only channel that doesn't loop, so the DLL itself skips the clip when `Sound_EnableSFX` or
+`Sound_EnableAmbience` is off. A clip more than a second late, or from before a map change, is dropped. Clips are
+`Sound\Ambience\Weather\Thunder{Near,Middle,Far}NN.mp3`, from the client patches (wow-server `weather.py`). A missing
+file plays nothing. `WeatherThunder=0` silences it.
+
 Rain rings are ordinary ripple disturbances at random points around the camera, at most 6 per 30 Hz step, so they share
-the ripple pass's cost and its limit of 48. Lightning is a timer in the DLL, not the client's own strokes, so a flash
-need not match a thunder sound. Its brightness follows the fog's, so a dark night gets a smaller jump than a fixed colour
-would give.
+the ripple pass's cost and its limit of 48. Lightning fires under the thunder palette at a weight of at least 0.4, or
+without an overcast in heavy rain, and not in ash or for 15 seconds after it, as the palette fades more slowly than the
+ash. It's a timer in the DLL, not the client's own strokes, so a flash need not match a thunder sound. Its brightness
+follows the fog's, so a dark night gets a smaller jump than a fixed colour would give.
 
 The converter keeps the fog rows the Classic client selects (flag bit 3) at their layer index (0–2). At run
 time the DLL blends the Classic lights around the camera: spheres at full weight inside the falloff start and
@@ -385,6 +453,7 @@ Gx is the graphics device `[0xC5DF88]`.
 | Camera in liquid | `0xCD8794` |
 | Client's storm weight (0..1), always 0 in this build | `0xD38B88` |
 | Weather object; its latest intensity and type (0 none or fog, 1 rain, 2 snow, 3 sand) | `[0xCD7544]`, `+0x00`, `+0x20` |
+| Light swaps: count, entries; each one's replaced row, row copy and fade | `0xD39018`, `[0xD3901C]`, `+0x00`, `+0x04`, `+0x08` |
 | Light params slot forced by the current screen effect (−1 = none) | `0xD38B58` |
 | Glow: `ffx` CVar, current effect, glow effect, glow amount | `0xD45774`, `0xD45780`, `0xB74364`, `0xD38C2C` |
 | Ghost (death) screen effect | `0xB74368` |
@@ -806,11 +875,17 @@ its comments describe every key. In the game, `Ctrl+F7` opens the same settings 
 | `NoiseWindSpeed` | 0.5 | Drift of the variation along world +X in yd/s |
 | `ClassicNoise` | 1 | The modern client's authored noise on the Classic layers that carry it (mostly storms); 0 = off |
 | `WeatherEffects` | 1 | Weather changes the fog, sun, god rays and water; 0 = the clear look in all weather |
+| `StormClouds` | 1 | Clouds that grow and darken with the overcast; 0 = none from here |
+| `CloudPreviewWeight`, `CloudPreviewStorm` | 0, 0 | For looking only: draw this overcast weight, and how far it is thunder; 0 = follow the game |
+| `CloudFairCover` | 0 | Share of the sky always covered, 0..1 |
+| `CloudDarkness`, `CloudOpacity`, `CloudWind` | 1.0, 1.0, 1.0 | How dark the thick parts get, how solid the clouds are, how fast they move |
 | `WeatherStrength` | 1.0 | How strongly weather changes the look, 0..2; the storm fog doesn't scale with this |
 | `WeatherEaseSeconds` | 30 | Seconds for weather to come in fully or pass |
 | `WeatherAfterRainMist`, `WeatherDryingSeconds` | 0.5, 600 | Extra mist while the ground is wet, and the seconds it takes to dry |
 | `WeatherLowSunRays`, `WeatherClearingRays` | 0.5, 1.0 | God rays in clear weather at a low sun, and as a front passes |
-| `WeatherRainRings`, `WeatherLightning`, `WeatherDawnMist` | 1.0, 1.0, 0.4 | Rain rings on water, flashes in heavy rain, and mist around sunrise; 0 = none |
+| `WeatherRainRings`, `WeatherLightning`, `WeatherDawnMist` | 1.0, 0.8, 0.4 | Rain rings on water, flashes in a thunderstorm, and mist around sunrise; 0 = none |
+| `WeatherBolts` | 1.0 | How bright the lightning bolts are, 0..1.5; 0 = flashes only |
+| `WeatherThunder` | 1 | Thunder after each strike; 0 = silent |
 | `Rain*`, `Snow*`, `Sand*`, `Fog*` | see `LuxVelum.ini` | Each kind's `Sun`, `Rays`, `Exposure`, `Density`, `Drift`, `Variation`, `Tint`, `Waves`, `Wind`, `Foam` and `Glint` at full intensity |
 | `StockFog` | 1 | 1 replaces the stock fog with the distance fog, 0 keeps it |
 | `TransparentFog` | 0 | 1 fogs see-through effects at their own distance, 0 at the scene behind (see Transparent fog) |

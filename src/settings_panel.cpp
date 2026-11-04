@@ -266,6 +266,8 @@ void DrawWeatherNow()
                 reading.intensity);
     ImGui::Text("Storm fog %.2f, sun %.2f, thickness %.2f, wet ground %.2f", look.stormBlend, look.sun, look.density,
                 look.wetness);
+    const OvercastReading overcast = engine::LastOvercast();
+    ImGui::Text("Overcast %.2f, thunder share %.2f", overcast.weight, overcast.share[kOvercastStorm]);
 }
 
 bool DrawWeatherKind(Config& c, int kind)
@@ -283,6 +285,26 @@ bool DrawWeatherKind(Config& c, int kind)
     return changed;
 }
 
+bool DrawStormClouds(Config& c)
+{
+    bool changed = Toggle("Storm clouds", c.stormClouds,
+                          "Clouds that grow, merge and darken as an overcast builds toward a storm. Off: none from "
+                          "here");
+    if (!c.stormClouds)
+        return changed;
+    changed |= Slider("Preview storm build-up", c.cloudPreviewWeight, 0.0f, 1.0f, "%.2f",
+                      "For looking only: draw this overcast weight whatever the weather is. 0 = follow the game");
+    changed |= Slider("Preview thunder", c.cloudPreviewStorm, 0.0f, 1.0f, "%.2f",
+                      "For looking only: how far the preview is thunder instead of rain");
+    changed |= Slider("Fair-weather cover", c.cloudFairCover, 0.0f, 1.0f, "%.2f",
+                      "Share of the sky always covered, for trying these as fair-weather clouds. 0 = only under an "
+                      "overcast");
+    changed |= Slider("Cloud darkness", c.cloudDarkness, 0.25f, 3.0f, "%.2f", "How dark the thick parts get");
+    changed |= Slider("Cloud opacity", c.cloudOpacity, 0.0f, 1.0f, "%.2f", "How solid the clouds are");
+    changed |= Slider("Cloud wind", c.cloudWind, 0.0f, 8.0f, "%.2f", "How fast the clouds move");
+    return changed;
+}
+
 bool DrawWeather(Config& c)
 {
     const Section section("Weather");
@@ -292,6 +314,7 @@ bool DrawWeather(Config& c)
     bool changed = Toggle("Weather effects", c.weatherEffects,
                           "Rain, snow, sand and fog change the fog, sun, god rays and water. Off: the clear look stays "
                           "in all weather");
+    changed |= DrawStormClouds(c);
     changed |= Slider("Strength", c.weatherStrength, 0.0f, 2.0f, "%.2f",
                       "How strongly weather changes the look. The area's own storm fog doesn't scale with this");
     changed |= Slider("Change time", c.weatherEaseSeconds, 1.0f, 300.0f, "%.0f s",
@@ -307,8 +330,15 @@ bool DrawWeather(Config& c)
     changed |= Slider("Rain rings", c.weatherRainRings, 0.0f, 3.0f, "%.2f",
                       "Rain drops making rings on modern water around you; needs water ripples on. 0 = none");
     changed |= Slider("Lightning", c.weatherLightning, 0.0f, 1.5f, "%.2f",
-                      "Brief flashes lighting the fog in heavy rain, every 8 to 35 seconds. Can be uncomfortable for "
-                      "people sensitive to flashing light. 0 = none");
+                      "Brief flashes lighting the clouds and fog in a thunderstorm, every 8 to 35 seconds. Can be "
+                      "uncomfortable for people sensitive to flashing light. 0 = none");
+    changed |= Slider("Lightning bolts", c.weatherBolts, 0.0f, 1.5f, "%.2f",
+                      "How bright the bolts are that fork down from the clouds behind the land. 0 = flashes only");
+    changed |= Toggle("Thunder", c.weatherThunder,
+                      "Thunder after each strike, sooner and louder the nearer it is. Follows the master volume, and "
+                      "is off when sound effects or ambient sounds are off");
+    if (c.weatherEffects && c.weatherLightning > 0.0f && ImGui::Button("Strike now"))
+        engine::RequestLightningStrike();
     changed |= Slider("Dawn mist", c.weatherDawnMist, 0.0f, 2.0f, "%.2f",
                       "Extra mist around sunrise in clear weather. 0 = none");
     for (int kind = 0; kind < kWeatherKinds; ++kind)

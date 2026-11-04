@@ -29,6 +29,7 @@ bool RenderFog(FogDevice* device, const FrameInputs& in, const Config& cfg, cons
 bool RenderFog(FogDevice* device, const FrameInputs& in, const Config& cfg, FogPass pass, const char** skipReason);
 bool FogReadyToRender(FogDevice* device, const D3DVIEWPORT9& vp, const char** skipReason);
 bool RenderGodRaysAfterWorld(FogDevice* device, const char** skipReason);
+bool RenderSkyClouds(FogDevice* device, const SkyCloudInputs& in, const Config& cfg, const char** skipReason);
 StockFogFit LastStockFogFit(FogDevice* device);
 bool AdaptiveLightingHistory(FogDevice* device);
 void DrawnFogShaders(FogDevice* device, IDirect3DPixelShader9** march, IDirect3DPixelShader9** composite,

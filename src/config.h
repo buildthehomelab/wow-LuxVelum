@@ -1,5 +1,6 @@
 #pragma once
 
+#include "sky_clouds.h"
 #include "weather_director.h"
 
 #include <string>
@@ -55,6 +56,15 @@ struct Config
     float noiseWindSpeed = 0.5f;
     bool classicNoise = true;
     bool weatherEffects = true;
+    bool stormClouds = true;
+    float cloudPreviewWeight = 0.0f;
+    float cloudPreviewStorm = 0.0f;
+    float cloudFairCover = 0.0f;
+    float cloudDarkness = 1.0f;
+    float cloudOpacity = 1.0f;
+    float cloudWind = 1.0f;
+    float weatherBolts = 1.0f;
+    bool weatherThunder = true;
     float weatherStrength = 1.0f;
     float weatherEaseSeconds = 30.0f;
     float weatherAfterRainMist = 0.5f;
@@ -102,6 +112,7 @@ struct Config
 };
 
 WeatherTuning WeatherTuningFrom(const Config& config);
+CloudTuning CloudTuningFrom(const Config& config);
 bool SameFogSettings(const Config& a, const Config& b);
 bool SameLiveSettings(const Config& a, const Config& b);
 std::string SettingChanges(const Config& before, const Config& after);

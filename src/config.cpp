@@ -90,6 +90,13 @@ const FloatSetting kFloatSettings[] = {
     {"FarClipMax", &Config::farClipMax, 0.0f, kEngineFarClipMax},
     {"MaxDistance", &Config::maxDistance, 200.0f, 5000.0f},
     {"Temporal", &Config::temporal, 0.0f, 0.97f},
+    {"CloudPreviewWeight", &Config::cloudPreviewWeight, 0.0f, 1.0f},
+    {"CloudPreviewStorm", &Config::cloudPreviewStorm, 0.0f, 1.0f},
+    {"CloudFairCover", &Config::cloudFairCover, 0.0f, 1.0f},
+    {"CloudDarkness", &Config::cloudDarkness, 0.25f, 3.0f},
+    {"CloudOpacity", &Config::cloudOpacity, 0.0f, 1.0f},
+    {"CloudWind", &Config::cloudWind, 0.0f, 8.0f},
+    {"WeatherBolts", &Config::weatherBolts, 0.0f, 1.5f},
     {"WeatherStrength", &Config::weatherStrength, 0.0f, 2.0f},
     {"WeatherEaseSeconds", &Config::weatherEaseSeconds, 1.0f, 300.0f},
     {"WeatherAfterRainMist", &Config::weatherAfterRainMist, 0.0f, 2.0f},
@@ -174,6 +181,8 @@ const BoolSetting kBoolSettings[] = {
     {"Water", &Config::water},                       {"Multisampling", &Config::multisampling},
     {"ClassicNoise", &Config::classicNoise},       {"TransparentFog", &Config::transparentFog},
     {"WeatherEffects", &Config::weatherEffects},
+    {"StormClouds", &Config::stormClouds},
+    {"WeatherThunder", &Config::weatherThunder},
 };
 
 const BoolSetting kWaterBoolSettings[] = {
@@ -463,6 +472,11 @@ std::string HotkeyName(const Hotkey& key)
     if (key.alt)
         name += "Alt+";
     return name + KeyName(key.virtualKey);
+}
+
+CloudTuning CloudTuningFrom(const Config& c)
+{
+    return {c.cloudPreviewWeight, c.cloudPreviewStorm, c.cloudFairCover, c.cloudDarkness, c.cloudOpacity};
 }
 
 WeatherTuning WeatherTuningFrom(const Config& c)

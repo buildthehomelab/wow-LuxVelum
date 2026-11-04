@@ -128,6 +128,7 @@ public:
     bool ReadSceneDepth(const DepthTexel* texels, int count, float* values);
     bool Render(const FrameInputs& in, const Config& cfg, FogPass pass, const char** skip);
     bool RenderGodRaysAfterWorld(const char** skip);
+    bool RenderSkyClouds(const SkyCloudInputs& in, const Config& cfg, const char** skip);
     bool ReadyToRender(const D3DVIEWPORT9& vp, const char** skip);
     const StockFogFit& LastStockFogFit() const { return m_renderer.LastStockFogFit(); }
     bool AdaptiveLightingHistory() const { return m_renderer.AdaptiveLightingHistory(); }
@@ -1125,6 +1126,14 @@ bool FogDevice::Render(const FrameInputs& in, const Config& cfg, FogPass pass, c
     return ok;
 }
 
+bool FogDevice::RenderSkyClouds(const SkyCloudInputs& in, const Config& cfg, const char** skip)
+{
+    const bool ok = FogActive() && m_renderer.RenderSkyClouds(m_real, Depth(), in, cfg);
+    if (skip)
+        *skip = FogActive() ? m_renderer.LastSkipReason() : "fog inactive";
+    return ok;
+}
+
 bool FogDevice::ReadyToRender(const D3DVIEWPORT9& vp, const char** skip)
 {
     const bool ready = FogActive() && m_renderer.ReadyToRender(m_real, Depth(), vp);
@@ -1257,6 +1266,15 @@ bool FogReadyToRender(FogDevice* device, const D3DVIEWPORT9& vp, const char** sk
 {
     if (device)
         return device->ReadyToRender(vp, skipReason);
+    if (skipReason)
+        *skipReason = "no fog device";
+    return false;
+}
+
+bool RenderSkyClouds(FogDevice* device, const SkyCloudInputs& in, const Config& cfg, const char** skipReason)
+{
+    if (device)
+        return device->RenderSkyClouds(in, cfg, skipReason);
     if (skipReason)
         *skipReason = "no fog device";
     return false;

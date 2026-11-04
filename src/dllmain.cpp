@@ -1,3 +1,4 @@
+#include "sky_clouds.h"
 #include "client_light_stay.h"
 #include "client_ripple_sprites.h"
 #include "config.h"
@@ -90,6 +91,9 @@ void Attach(HMODULE module)
     if (engineHooks)
     {
         PrepareAuthoredNoise();
+        InstallSkyCloudHook();
+        if (cfg.stormClouds)
+            PreparedCloudField();
         InstallTransparentFogHooks();
         EnableForeverLookOnHookedClient();
     }
