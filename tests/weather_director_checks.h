@@ -1,8 +1,10 @@
 #pragma once
 
+#include "water_rain.h"
 #include "weather_director.h"
 
 #include <cmath>
+#include <cstdio>
 #include <limits>
 
 namespace weather_director_checks
@@ -185,6 +187,111 @@ void CheckIndoors()
           "outdoors it's untouched");
 }
 
+void CheckRainDrops()
+{
+    WeatherDirector director;
+    WeatherTuning tuning = TestTuning();
+    tuning.rainRings = 1.0f;
+    WeatherReading rain;
+    rain.type = kClientWeatherRain;
+    rain.intensity = 1.0f;
+    const float heavy = director.Step(rain, tuning, kStart).rainDropsPerSecond;
+    Check(heavy > 0.0f, "rain makes drops");
+    WeatherDirector light;
+    rain.intensity = 0.5f;
+    Check(Near(light.Step(rain, tuning, kStart).rainDropsPerSecond, heavy * 0.5f), "lighter rain makes fewer");
+    WeatherDirector snow;
+    WeatherReading snowing;
+    snowing.type = kClientWeatherSnow;
+    snowing.intensity = 1.0f;
+    Check(snow.Step(snowing, tuning, kStart).rainDropsPerSecond == 0.0f, "snow makes no rings");
+}
+
+void CheckLightning()
+{
+    Check(Near(WeatherLightningEnvelope(0.0), 1.0f) && WeatherLightningEnvelope(0.05) < 1.0f,
+          "a strike starts at full brightness and falls");
+    Check(WeatherLightningEnvelope(0.2) > WeatherLightningEnvelope(0.17), "a strike has a second stroke");
+    Check(WeatherLightningEnvelope(-0.1) == 0.0f && WeatherLightningEnvelope(2.0) == 0.0f, "a flash ends");
+
+    WeatherTuning tuning = TestTuning();
+    tuning.lightning = 1.0f;
+    WeatherDirector storm;
+    WeatherReading heavy;
+    heavy.type = kClientWeatherRain;
+    heavy.intensity = 1.0f;
+    int strikes = 0;
+    bool lit = false;
+    constexpr double kFrame = 1.0 / 30.0;
+    constexpr int kFrames = 30 * 300;
+    for (int frame = 0; frame < kFrames; ++frame)
+    {
+        const bool flashing = storm.Step(heavy, tuning, kStart + frame * kFrame).flash > 0.8f;
+        if (flashing && !lit)
+            ++strikes;
+        lit = flashing;
+    }
+    std::printf("     lightning: %d strikes in 5 minutes of storm\n", strikes);
+    Check(strikes >= 8 && strikes <= 40, "a storm strikes every 8 to 35 seconds");
+
+    WeatherDirector drizzle;
+    heavy.intensity = 0.4f;
+    bool anyFlash = false;
+    for (int frame = 0; frame < kFrames; ++frame)
+        anyFlash = anyFlash || drizzle.Step(heavy, tuning, kStart + frame * kFrame).flash > 0.0f;
+    Check(!anyFlash, "light rain has no lightning");
+
+    tuning.lightning = 0.0f;
+    WeatherDirector off;
+    heavy.intensity = 1.0f;
+    anyFlash = false;
+    for (int frame = 0; frame < kFrames; ++frame)
+        anyFlash = anyFlash || off.Step(heavy, tuning, kStart + frame * kFrame).flash > 0.0f;
+    Check(!anyFlash, "lightning can be turned off");
+}
+
+void CheckDawnMist()
+{
+    Check(WeatherDawnWeight(6.5f / 24.0f) > 0.99f, "dawn mist peaks soon after sunrise");
+    Check(WeatherDawnWeight(0.5f) == 0.0f && WeatherDawnWeight(0.0f) == 0.0f,
+          "there's no dawn mist at noon or midnight");
+    WeatherDirector director;
+    WeatherTuning tuning = TestTuning();
+    tuning.dawnMist = 0.4f;
+    WeatherReading dawn;
+    dawn.dayFraction = 6.5f / 24.0f;
+    Check(Near(director.Step(dawn, tuning, kStart).density, 1.4f), "clear dawns get mist");
+    WeatherDirector rainy;
+    dawn.type = kClientWeatherRain;
+    dawn.intensity = 1.0f;
+    Check(Near(rainy.Step(dawn, tuning, kStart).density, tuning.profiles[kWeatherRain].density),
+          "weather replaces the dawn mist");
+}
+
+void CheckRainRings()
+{
+    WaterRainDrops drops;
+    const float centre[2] = {100.0f, 200.0f};
+    WaterRippleDisturbance out[kMaxWaterRainDropsPerStep];
+    Check(drops.Take(0.0f, centre, 20.0f, out, kMaxWaterRainDropsPerStep) == 0, "no rain, no rings");
+    uint32_t total = 0;
+    bool inside = true;
+    for (int step = 0; step < 300; ++step)
+    {
+        const uint32_t count = drops.Take(3.0f, centre, 20.0f, out, kMaxWaterRainDropsPerStep);
+        total += count;
+        for (uint32_t i = 0; i < count; ++i)
+            inside = inside && std::fabs(out[i].from[0] - centre[0]) <= 20.0f &&
+                     std::fabs(out[i].to[1] - centre[1]) <= 20.0f && out[i].amplitude < 0.0f;
+    }
+    Check(total == 900 && inside, "drops fall at the asked rate within the window around the camera");
+    uint32_t sparse = 0;
+    for (int step = 0; step < 100; ++step)
+        sparse += drops.Take(0.25f, centre, 20.0f, out, kMaxWaterRainDropsPerStep);
+    Check(sparse == 25, "light rain builds up drops across steps");
+    Check(drops.Take(50.0f, centre, 20.0f, out, 2) == 2, "drops never exceed the free disturbances");
+}
+
 void Run()
 {
     CheckKinds();
@@ -196,5 +303,9 @@ void Run()
     CheckTintColour();
     CheckGodRays();
     CheckIndoors();
+    CheckRainDrops();
+    CheckLightning();
+    CheckDawnMist();
+    CheckRainRings();
 }
 }

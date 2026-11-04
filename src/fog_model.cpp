@@ -6,6 +6,7 @@
 
 namespace
 {
+constexpr float kLightningFlashColor[3] = {0.55f, 0.60f, 0.75f};
 constexpr float kHazeDensity = 0.00035f;
 constexpr float kHazeG = 0.75f;
 constexpr float kHazeIsotropic = 0.3f;
@@ -322,6 +323,18 @@ void ApplyWeatherTint(const WeatherLook& weather, FogParams& fog)
         TintTowardWeather(noise.fade, tint, weather.tint);
 }
 
+void AddLightningFlash(float flash, FogParams& fog)
+{
+    if (flash <= 0.0f)
+        return;
+    float light[3] = {kLightningFlashColor[0], kLightningFlashColor[1], kLightningFlashColor[2]};
+    Encode(light, fog.linear);
+    for (FogLayer& layer : fog.layers)
+        if (layer.density > 0.0f)
+            for (int channel = 0; channel < 3; ++channel)
+                layer.emissive[channel] += light[channel] * flash;
+}
+
 void ApplyInteriorFog(float weight, const Config& cfg, FogParams& fog)
 {
     const float retainedDensity = std::isfinite(cfg.interiorDensity) ? std::clamp(cfg.interiorDensity, 0.0f, 1.0f)
@@ -410,6 +423,7 @@ FogParams BuildFogParams(const FrameInputs& in, const Config& settings, const Au
         DistanceLayer(in, cfg, p, elevationFadedScatter, fogColor, distanceFog);
     }
     ApplyWeatherTint(weather, p);
+    AddLightningFlash(weather.flash, p);
     ApplyInteriorFog(interiorWeight, cfg, p);
     return p;
 }

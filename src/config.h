@@ -61,6 +61,9 @@ struct Config
     float weatherDryingSeconds = 600.0f;
     float weatherLowSunRays = 0.5f;
     float weatherClearingRays = 1.0f;
+    float weatherRainRings = 1.0f;
+    float weatherLightning = 1.0f;
+    float weatherDawnMist = 0.4f;
     float rainSun = 0.35f, rainRays = 0.0f, rainExposure = 0.85f, rainDensity = 1.25f, rainDrift = 2.5f,
           rainVariation = 2.0f, rainTint = 0.0f, rainWaves = 1.35f, rainWind = 2.0f, rainFoam = 1.6f, rainGlint = 0.25f;
     float snowSun = 0.5f, snowRays = 0.0f, snowExposure = 1.05f, snowDensity = 1.3f, snowDrift = 0.6f,

@@ -10,6 +10,8 @@
 #include "grading_renderer.h"
 #include "local_light_stabiliser.h"
 #include "log.h"
+#include "water_rain.h"
+#include "weather_director.h"
 #include "msaa_depth.h"
 #include "noise_volume.h"
 #include "water_contacts.h"
@@ -1001,6 +1003,11 @@ void CheckAuthoredFogFollowsClientDirectLight(const FogData& data)
               duskwoodNoon.layers[0].emissive[2] < 0.4f,
           "Darkshire's noon fog is a dim grey-green, not Forever's cyan");
 
+    FrameInputs struck = clearDuskwood;
+    struck.weather.flash = 1.0f;
+    const FogParams struckLook = BuildFogParams(struck, cfg, &duskwoodFog);
+    Check(struckLook.layers[0].emissive[2] > BuildFogParams(clearDuskwood, cfg, &duskwoodFog).layers[0].emissive[2],
+          "lightning brightens the fog");
     FogParams clearLook = BuildFogParams(clearDuskwood, cfg, &duskwoodFog);
     FrameInputs rainy = clearDuskwood;
     rainy.weather.sun = 0.5f;

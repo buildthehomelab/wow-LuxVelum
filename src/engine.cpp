@@ -374,6 +374,7 @@ WeatherReading ReadClientWeather()
         reading.type = Read<int32_t>(weather + kMapWeatherType);
         reading.intensity = Read<float>(weather + kMapWeatherIntensity);
     }
+    reading.dayFraction = Read<float>(kDayFraction);
     return reading;
 }
 

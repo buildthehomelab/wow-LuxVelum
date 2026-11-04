@@ -21,6 +21,7 @@
 namespace
 {
 constexpr float kMinWeatherWaterWind = 0.5f;
+constexpr float kRainWindowShare = 0.45f;
 constexpr float kMaxWeatherWaterWind = 10.0f;
 constexpr UINT kWaterPixelConstants = 72;
 constexpr DWORD kWaterSamplerStages = 16;
@@ -1113,7 +1114,9 @@ bool WaterRenderer::SimulateRipples(IDirect3DDevice9* dev, double seconds)
     m_contacts.Update(m_water.contacts, seconds);
     m_summaryContacts = std::max(m_summaryContacts, m_contacts.Contacts());
     const bool supported = m_ripples.Supported(dev);
-    if (!m_ripples.Running() && !m_contacts.Emitting())
+    const float rainDropsPerStep = OutdoorWeatherLook(m_in, m_cfg).rainDropsPerSecond *
+                                   static_cast<float>(kWaterRippleStepSeconds);
+    if (!m_ripples.Running() && !m_contacts.Emitting() && rainDropsPerStep <= 0.0f)
     {
         m_ripplesAvailable = m_ripplesAvailable && supported;
         return false;
@@ -1136,8 +1139,11 @@ bool WaterRenderer::SimulateRipples(IDirect3DDevice9* dev, double seconds)
     WaterRippleDisturbance disturbances[kMaxWaterRippleDisturbances];
     for (int step = 0; step < schedule.steps; ++step)
     {
-        const uint32_t count =
+        uint32_t count =
             m_contacts.TakeDisturbances(schedule.stepSeconds[step], disturbances, kMaxWaterRippleDisturbances);
+        const float rainHalfExtent = texels * kWaterRippleTexelYards * kRainWindowShare;
+        count += m_rainDrops.Take(rainDropsPerStep, centre, rainHalfExtent, disturbances + count,
+                                  kMaxWaterRippleDisturbances - count);
         m_ripples.Step(dev, centre, disturbances, count);
     }
     m_summaryRippleTexels = std::max(m_summaryRippleTexels, texels);

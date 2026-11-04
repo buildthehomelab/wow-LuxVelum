@@ -60,7 +60,8 @@ This fork ([Raz0r1337/coa-vfog](https://github.com/Raz0r1337/coa-vfog), developm
 - **Authored noise**: drifting fog banks where the Classic layers carry the modern client's noise, mostly in
   storms (`ClassicNoise`).
 - **Weather**: rain, snow, sand and fog bring in each area's storm fog and change the sun, god rays, mist and water,
-  with mist and rays through the clearing after rain (`WeatherEffects`, and the Weather section of the settings window).
+  with mist and rays through the clearing after rain, rain rings on water, lightning in heavy rain and dawn mist
+  (`WeatherEffects`, and the Weather section of the settings window).
 - **Density variation**: a two-octave field anchored in world space modulates the scene layers around their
   authored mean and drifts along world +X; the distance fog stays smooth so it cannot uncover the far clip. This
   is an artistic control, not a reconstruction of Classic's authored noise.
@@ -243,6 +244,10 @@ intensity of at least 0.27 counts as fog: below that a server sends clear skies.
 colours are the DLL's own. Each kind eases on its own, so rain turning to snow fades across. They go to the frame in
 `FrameInputs::weather`, not through `Config`, because a changed setting resets the temporal history. `0x7846A0` and
 `0x784850` are read from the code, and how any of this looks isn't confirmed in game.
+
+Rain rings are ordinary ripple disturbances at random points around the camera, at most 6 per 30 Hz step, so they share
+the ripple pass's cost and its limit of 48. Lightning is a timer in the DLL, not the client's own strokes, so a flash
+need not match a thunder sound.
 
 The converter keeps the fog rows the Classic client selects (flag bit 3) at their layer index (0–2). At run
 time the DLL blends the Classic lights around the camera: spheres at full weight inside the falloff start and
@@ -797,6 +802,7 @@ its comments describe every key. In the game, `Ctrl+F7` opens the same settings 
 | `WeatherEaseSeconds` | 30 | Seconds for weather to come in fully or pass |
 | `WeatherAfterRainMist`, `WeatherDryingSeconds` | 0.5, 600 | Extra mist while the ground is wet, and the seconds it takes to dry |
 | `WeatherLowSunRays`, `WeatherClearingRays` | 0.5, 1.0 | God rays in clear weather at a low sun, and as a front passes |
+| `WeatherRainRings`, `WeatherLightning`, `WeatherDawnMist` | 1.0, 1.0, 0.4 | Rain rings on water, flashes in heavy rain, and mist around sunrise; 0 = none |
 | `Rain*`, `Snow*`, `Sand*`, `Fog*` | see `LuxVelum.ini` | Each kind's `Sun`, `Rays`, `Exposure`, `Density`, `Drift`, `Variation`, `Tint`, `Waves`, `Wind`, `Foam` and `Glint` at full intensity |
 | `StockFog` | 1 | 1 replaces the stock fog with the distance fog, 0 keeps it |
 | `TransparentFog` | 0 | 1 fogs see-through effects at their own distance, 0 at the scene behind (see Transparent fog) |

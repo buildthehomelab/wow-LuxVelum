@@ -298,6 +298,12 @@ bool DrawWeather(Config& c)
                       "God rays in clear weather when the sun or moon is low");
     changed |= Slider("Clearing rays", c.weatherClearingRays, 0.0f, 4.0f, "%.2f",
                       "God rays breaking through as a front passes, while the ground is still wet");
+    changed |= Slider("Rain rings", c.weatherRainRings, 0.0f, 3.0f, "%.2f",
+                      "Rain drops making rings on modern water around you; needs water ripples on. 0 = none");
+    changed |= Slider("Lightning", c.weatherLightning, 0.0f, 2.0f, "%.2f",
+                      "Brief flashes lighting the fog in heavy rain, every 8 to 35 seconds. 0 = none");
+    changed |= Slider("Dawn mist", c.weatherDawnMist, 0.0f, 2.0f, "%.2f",
+                      "Extra mist around sunrise in clear weather. 0 = none");
     for (int kind = 0; kind < kWeatherKinds; ++kind)
         changed |= DrawWeatherKind(c, kind);
     return changed;

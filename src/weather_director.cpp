@@ -8,6 +8,18 @@ namespace
 constexpr float kMinimumEaseSeconds = 0.1f;
 constexpr float kLowSunFullBelow = 0.20f;
 constexpr float kLowSunNoneAbove = 0.55f;
+constexpr float kFullRainDropsPerSecond = 180.0f;
+constexpr float kStormRainBlend = 0.7f;
+constexpr double kShortestStrikeGapSeconds = 8.0;
+constexpr double kLongestStrikeGapSeconds = 35.0;
+constexpr double kFirstStrokeSeconds = 0.09;
+constexpr double kSecondStrokeDelay = 0.18;
+constexpr double kSecondStrokeSeconds = 0.12;
+constexpr float kSecondStrokeShare = 0.7f;
+constexpr double kEnvelopeEndSeconds = 1.0;
+constexpr float kDawnStart = 4.5f / 24.0f;
+constexpr float kDawnPeak = 6.5f / 24.0f;
+constexpr float kDawnEnd = 9.0f / 24.0f;
 
 float Mix(float from, float to, float amount)
 {
@@ -71,6 +83,31 @@ void WeatherDirector::Advance(const WeatherReading& reading, const WeatherTuning
     m_wetness = EasedToward(m_wetness, wetting, elapsed, seconds);
 }
 
+float WeatherDirector::NextUnit()
+{
+    m_random = m_random * 1664525u + 1013904223u;
+    return static_cast<float>(m_random >> 8) / static_cast<float>(1u << 24);
+}
+
+float WeatherDirector::Flash(const WeatherTuning& tuning, double nowSeconds)
+{
+    const bool storm = m_blend[kWeatherRain] >= kStormRainBlend && tuning.lightning > 0.0f;
+    if (!storm)
+    {
+        m_nextStrike = 0.0;
+        return WeatherLightningEnvelope(nowSeconds - m_lastStrike) * std::max(tuning.lightning, 0.0f);
+    }
+    if (m_nextStrike == 0.0)
+        m_nextStrike = nowSeconds + kShortestStrikeGapSeconds * NextUnit();
+    if (nowSeconds >= m_nextStrike)
+    {
+        m_lastStrike = nowSeconds;
+        m_nextStrike = nowSeconds + kShortestStrikeGapSeconds +
+                       (kLongestStrikeGapSeconds - kShortestStrikeGapSeconds) * NextUnit();
+    }
+    return WeatherLightningEnvelope(nowSeconds - m_lastStrike) * tuning.lightning;
+}
+
 WeatherLook WeatherDirector::Step(const WeatherReading& reading, const WeatherTuning& tuning, double nowSeconds)
 {
     const double elapsed = m_started ? std::max(nowSeconds - m_lastSeconds, 0.0) : -1.0;
@@ -111,9 +148,13 @@ WeatherLook WeatherDirector::Step(const WeatherReading& reading, const WeatherTu
         }
 
     const float clearing = m_wetness * (1.0f - cover);
+    const float mist = clearing * std::max(tuning.afterRainMist, 0.0f) +
+                       (1.0f - cover) * WeatherDawnWeight(reading.dayFraction) * std::max(tuning.dawnMist, 0.0f);
     look.wetness = m_wetness;
-    look.density *= 1.0f + clearing * std::max(tuning.afterRainMist, 0.0f);
-    look.variation *= 1.0f + clearing * std::max(tuning.afterRainMist, 0.0f);
+    look.density *= 1.0f + mist;
+    look.variation *= 1.0f + mist;
+    look.rainDropsPerSecond = m_blend[kWeatherRain] * kFullRainDropsPerSecond * std::max(tuning.rainRings, 0.0f);
+    look.flash = Flash(tuning, nowSeconds);
     look.lowSunRays = std::max(tuning.lowSunRays, 0.0f) * (1.0f - cover);
     look.clearingRays = std::max(tuning.clearingRays, 0.0f) * clearing;
     return look;
@@ -132,11 +173,33 @@ WeatherLook NeutralWeatherLook(const WeatherLook& look, float outdoorShare)
     out.drift = Mix(1.0f, look.drift, share);
     out.variation = Mix(1.0f, look.variation, share);
     out.tint = look.tint * share;
+    out.rainDropsPerSecond = look.rainDropsPerSecond * share;
+    out.flash = look.flash * share;
     out.waves = Mix(1.0f, look.waves, share);
     out.wind = Mix(1.0f, look.wind, share);
     out.foam = Mix(1.0f, look.foam, share);
     out.glint = Mix(1.0f, look.glint, share);
     return out;
+}
+
+float WeatherLightningEnvelope(double sinceStrike)
+{
+    if (sinceStrike < 0.0 || sinceStrike > kEnvelopeEndSeconds)
+        return 0.0f;
+    float envelope = static_cast<float>(std::exp(-sinceStrike / kFirstStrokeSeconds));
+    if (sinceStrike > kSecondStrokeDelay)
+        envelope += kSecondStrokeShare *
+                    static_cast<float>(std::exp(-(sinceStrike - kSecondStrokeDelay) / kSecondStrokeSeconds));
+    return std::min(envelope, 1.0f);
+}
+
+float WeatherDawnWeight(float dayFraction)
+{
+    if (!std::isfinite(dayFraction) || dayFraction <= kDawnStart || dayFraction >= kDawnEnd)
+        return 0.0f;
+    const float t = dayFraction < kDawnPeak ? (dayFraction - kDawnStart) / (kDawnPeak - kDawnStart)
+                                            : (kDawnEnd - dayFraction) / (kDawnEnd - kDawnPeak);
+    return t * t * (3.0f - 2.0f * t);
 }
 
 float WeatherGodRayStrength(float configured, const WeatherLook& look, float sunHeight)
