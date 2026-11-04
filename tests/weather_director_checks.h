@@ -489,7 +489,8 @@ void CheckLightning()
     for (int frame = 1; frame < 60 && askedHeardAfter < 0.0; ++frame)
         if (askedThunder.Step(quiet, tuning, kStart + frame * kFrame).thunderClip != kNoThunderClip)
             askedHeardAfter = frame * kFrame;
-    Check(askedHeardAfter >= 0.1 && askedHeardAfter <= 0.9, "a strike asked for is close, so it's heard almost at once");
+    Check(askedHeardAfter >= 0.1 && askedHeardAfter <= 0.9,
+          "a strike asked for is close, so it's heard almost at once");
 
     tuning.lightning = 0.0f;
     WeatherDirector askedWhenOff;
