@@ -187,7 +187,7 @@ void CheckWaterSettingClamps(const std::wstring& outDir, const std::wstring& shi
                 c.waterClarity, c.waterZoneColors, c.waterRipples, c.waterDebugView);
     Check(c.water && c.waterQuality == 3 && c.waterWaves == 0.0f && c.waterWind == 10.0f && c.waterFoam == 2.0f &&
               c.waterReflections == 0.0f && c.waterSpecular == 4.0f && c.waterClarity == 0.25f &&
-              c.waterZoneColors == 1.0f && c.waterRipples == 2.0f && c.waterDebugView == 6 && c.waterClientSplashes,
+              c.waterZoneColors == 1.0f && c.waterRipples == 2.0f && c.waterDebugView == 7 && c.waterClientSplashes,
           "out-of-range water keys in the INI are clamped to their ranges");
 
     WritePrivateProfileStringW(L"LuxVelum", L"WaterWaves", L"nan", clampedIni.c_str());
