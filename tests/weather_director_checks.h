@@ -330,7 +330,7 @@ void CheckLightning()
         lit = flashing;
     }
     std::printf("     lightning: %d strikes in 5 minutes of storm\n", strikes);
-    Check(strikes >= 8 && strikes <= 40, "a storm strikes every 8 to 35 seconds");
+    Check(strikes >= 8 && strikes <= 40, "without an overcast, heavy rain strikes every 8 to 35 seconds");
 
     WeatherDirector drizzle;
     heavy.intensity = 0.4f;
@@ -338,6 +338,42 @@ void CheckLightning()
     for (int frame = 0; frame < kFrames; ++frame)
         anyFlash = anyFlash || drizzle.Step(heavy, tuning, kStart + frame * kFrame).flash > 0.0f;
     Check(!anyFlash, "light rain has no lightning");
+
+    const auto strikesIn = [&](WeatherReading reading) {
+        WeatherDirector director;
+        int seen = 0;
+        bool wasLit = false;
+        for (int frame = 0; frame < kFrames; ++frame)
+        {
+            const bool flashing = director.Step(reading, tuning, kStart + frame * kFrame).flash > 0.3f;
+            if (flashing && !wasLit)
+                ++seen;
+            wasLit = flashing;
+        }
+        return seen;
+    };
+    WeatherReading thunderOverSand;
+    thunderOverSand.type = kClientWeatherSand;
+    thunderOverSand.intensity = 0.5f;
+    thunderOverSand.overcastWeight = 0.8f;
+    thunderOverSand.thunderOvercast = 0.8f;
+    Check(strikesIn(thunderOverSand) >= 8, "the thunder palette strikes whatever is falling, as in Tanaris");
+    WeatherReading thunderOnly;
+    thunderOnly.overcastWeight = 0.8f;
+    thunderOnly.thunderOvercast = 0.8f;
+    Check(strikesIn(thunderOnly) >= 8, "an overcast shown with no weather packet still strikes");
+    WeatherReading heavyRainOvercast;
+    heavyRainOvercast.type = kClientWeatherRain;
+    heavyRainOvercast.intensity = 1.0f;
+    heavyRainOvercast.overcastWeight = 0.8f;
+    Check(strikesIn(heavyRainOvercast) == 0, "heavy rain under the rain palette has no lightning");
+    WeatherReading faintThunder = thunderOnly;
+    faintThunder.overcastWeight = 0.2f;
+    faintThunder.thunderOvercast = 0.2f;
+    Check(strikesIn(faintThunder) == 0, "a faint storm palette has no lightning");
+    WeatherReading ash = thunderOnly;
+    ash.ash = true;
+    Check(strikesIn(ash) == 0, "falling ash shares the storm palette but has no lightning");
 
     tuning.lightning = 0.0f;
     WeatherDirector off;

@@ -472,6 +472,11 @@ std::string HotkeyName(const Hotkey& key)
     return name + KeyName(key.virtualKey);
 }
 
+CloudTuning CloudTuningFrom(const Config& c)
+{
+    return {c.cloudPreviewWeight, c.cloudPreviewStorm, c.cloudFairCover, c.cloudDarkness, c.cloudOpacity};
+}
+
 WeatherTuning WeatherTuningFrom(const Config& c)
 {
     WeatherTuning t;

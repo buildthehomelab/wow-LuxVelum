@@ -1,5 +1,6 @@
 #pragma once
 
+#include "sky_clouds.h"
 #include "weather_director.h"
 
 #include <string>
@@ -109,6 +110,7 @@ struct Config
 };
 
 WeatherTuning WeatherTuningFrom(const Config& config);
+CloudTuning CloudTuningFrom(const Config& config);
 bool SameFogSettings(const Config& a, const Config& b);
 bool SameLiveSettings(const Config& a, const Config& b);
 std::string SettingChanges(const Config& before, const Config& after);

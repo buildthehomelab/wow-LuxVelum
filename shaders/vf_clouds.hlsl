@@ -25,6 +25,10 @@ static const float kSunReach = 0.03;
 static const float kSunSideShading = 1.6;
 static const float kFlashRepeats = 0.25;
 static const float kSunGlowPower = 8;
+static const float kStrikeEdge = 0.45;
+static const float kStrikeSharpness = 3;
+static const float kFlashEverywhere = 0.12;
+static const float3 kFlashColour = float3(0.75, 0.82, 1.0);
 
 float2 CloudPlanePoint(float3 ray)
 {
@@ -58,8 +62,9 @@ float4 main(float2 pixel : VPOS) : COLOR0
     float sunGlow = pow(saturate(dot(ray, cCloudToSun.xyz)), kSunGlowPower);
     colour += cCloudSunColour.rgb * sunGlow * (1 - thick) * cCloudSunColour.a;
 
-    float flash = tex2D(sCloudField, place * kFlashRepeats + cCloudFlash.xy).r;
-    colour += cCloudFlash.z * flash * flash * (0.35 + 0.65 * thick);
+    float strikeArea = saturate((tex2D(sCloudField, place * kFlashRepeats + cCloudFlash.xy).r - kStrikeEdge) *
+                                kStrikeSharpness);
+    colour += kFlashColour * cCloudFlash.z * (kFlashEverywhere + strikeArea * strikeArea) * (0.35 + 0.65 * thick);
 
     return float4(saturate(colour), alpha * horizon * cCloudLit.a);
 }

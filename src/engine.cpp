@@ -406,24 +406,6 @@ WeatherReading ReadClientWeather()
     return reading;
 }
 
-void StepWeatherLook(const Config& cfg)
-{
-    static WeatherDirector director;
-    if (!cfg.weatherEffects)
-    {
-        g_weatherReading = {};
-        g_weatherLook = {};
-        return;
-    }
-    const WeatherReading reading = ReadClientWeather();
-    if (WeatherKindOf(reading.type, reading.intensity, reading.ash) !=
-        WeatherKindOf(g_weatherReading.type, g_weatherReading.intensity, g_weatherReading.ash))
-        VF_LOG_INFO("weather: client type %d%s, intensity %.2f", reading.type, reading.ash ? " (ash)" : "",
-                    reading.intensity);
-    g_weatherReading = reading;
-    g_weatherLook = director.Step(reading, WeatherTuningFrom(cfg), ClockSeconds());
-}
-
 OvercastReading g_overcast;
 
 OvercastReading ReadClientOvercast()
@@ -443,6 +425,28 @@ OvercastReading ReadClientOvercast()
     }
     FinishOvercast(reading);
     return reading;
+}
+
+void StepWeatherLook(const Config& cfg)
+{
+    static WeatherDirector director;
+    if (!cfg.weatherEffects)
+    {
+        g_weatherReading = {};
+        g_weatherLook = {};
+        return;
+    }
+    WeatherReading reading = ReadClientWeather();
+    g_overcast = ReadClientOvercast();
+    const OvercastReading overcast = OvercastWithPreview(g_overcast, CloudTuningFrom(cfg));
+    reading.overcastWeight = overcast.weight;
+    reading.thunderOvercast = overcast.weight * overcast.share[kOvercastStorm];
+    if (WeatherKindOf(reading.type, reading.intensity, reading.ash) !=
+        WeatherKindOf(g_weatherReading.type, g_weatherReading.intensity, g_weatherReading.ash))
+        VF_LOG_INFO("weather: client type %d%s, intensity %.2f", reading.type, reading.ash ? " (ash)" : "",
+                    reading.intensity);
+    g_weatherReading = reading;
+    g_weatherLook = director.Step(reading, WeatherTuningFrom(cfg), ClockSeconds());
 }
 
 LightParamsSelection ReadLightParamsSelection()
@@ -1067,6 +1071,7 @@ bool BuildSkyCloudInputs(IDirect3DDevice9* device, SkyCloudInputs& out)
         g_overcast = ReadClientOvercast();
         out.overcast = g_overcast;
         out.flash = g_weatherLook.flash;
+        out.strikeSeed = g_weatherLook.strikeSeed;
         return true;
     }
     __except (EXCEPTION_EXECUTE_HANDLER)

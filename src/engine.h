@@ -51,6 +51,7 @@ struct SkyCloudInputs
     uint32_t skyMiddleColor;
     OvercastReading overcast;
     float flash;
+    float strikeSeed;
 };
 
 constexpr int kSkyColorCount = 6;

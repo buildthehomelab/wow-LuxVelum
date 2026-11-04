@@ -28,6 +28,8 @@ struct WeatherReading
     float dayFraction = 0.5f;
     int mapId = 0;
     float position[2] = {};
+    float overcastWeight = 0.0f;
+    float thunderOvercast = 0.0f;
 };
 
 struct WeatherProfile
@@ -81,6 +83,7 @@ struct WeatherLook
     float wetness = 0.0f;
     float rainDropsPerSecond = 0.0f;
     float flash = 0.0f;
+    float strikeSeed = 0.0f;
 };
 
 int32_t LiveClientWeatherType(int32_t requested, bool rainEffect, bool snowEffect, bool sandEffect);
@@ -100,7 +103,8 @@ public:
 private:
     void Advance(const WeatherReading& reading, const WeatherTuning& tuning, double elapsed);
     float LocalWetness(const WeatherReading& reading) const;
-    float Flash(const WeatherTuning& tuning, double nowSeconds);
+    bool LightningWeather(const WeatherReading& reading) const;
+    float Flash(const WeatherReading& reading, const WeatherTuning& tuning, double nowSeconds);
     float NextUnit();
 
     bool m_started = false;
@@ -113,5 +117,6 @@ private:
     float m_wetPosition[2] = {};
     double m_nextStrike = 0.0;
     double m_lastStrike = -1000.0;
+    float m_strikeSeed = 0.0f;
     uint32_t m_random = 0x51F15EEDu;
 };

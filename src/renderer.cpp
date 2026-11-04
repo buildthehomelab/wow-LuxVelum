@@ -76,7 +76,7 @@ constexpr float kCloudDeckHeightYards = 1500.0f;
 constexpr float kCloudTileWidth = 6.0f;
 constexpr float kCloudCurvature = 0.12f;
 constexpr float kCloudSunGlow = 0.5f;
-constexpr double kCloudFlashWander = 97.0;
+constexpr float kCloudStrikeWander = 7.0f;
 constexpr float kCloudLoggedStepsPerWeight = 20.0f;
 constexpr double kCloudSummarySeconds = 60.0;
 constexpr float kSummarySeconds = 60.0f;
@@ -1091,7 +1091,7 @@ void Renderer::DrawSkyClouds(IDirect3DDevice9* dev, const SkyCloudInputs& in, co
         {colours.dark[0], colours.dark[1], colours.dark[2], 0.0f},
         {in.toLight[0], in.toLight[1], in.toLight[2], 0.0f},
         {sun[0], sun[1], sun[2], kCloudSunGlow},
-        {static_cast<float>(std::fmod(m_cloudDrift.warpU * kCloudFlashWander, 1.0)), 0.0f, in.flash, 0.0f},
+        {in.strikeSeed, in.strikeSeed * kCloudStrikeWander, in.flash, 0.0f},
     };
 
     PrepareFullscreenPasses(dev);
@@ -1130,8 +1130,7 @@ bool Renderer::EnsureCloudShader(IDirect3DDevice9* dev)
 bool Renderer::DrawCloudsWithClientStateSaved(IDirect3DDevice9* dev, const SceneDepth& depth, const SkyCloudInputs& in,
                                               const Config& cfg)
 {
-    const CloudTuning tuning = {cfg.cloudPreviewWeight, cfg.cloudPreviewStorm, cfg.cloudFairCover, cfg.cloudDarkness,
-                                cfg.cloudOpacity};
+    const CloudTuning tuning = CloudTuningFrom(cfg);
     const OvercastReading overcast = OvercastWithPreview(in.overcast, tuning);
     const long long now = Ticks();
     StepCloudDrift(overcast, cfg, now);

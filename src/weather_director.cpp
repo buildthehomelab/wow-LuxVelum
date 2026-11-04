@@ -24,6 +24,7 @@ constexpr float kDawnEnd = 9.0f / 24.0f;
 constexpr float kWetFullWithin = 150.0f;
 constexpr float kWetNoneBeyond = 500.0f;
 constexpr double kFlashRiseSeconds = 0.03;
+constexpr float kLightestThunderOvercast = 0.4f;
 
 float Mix(float from, float to, float amount)
 {
@@ -145,9 +146,16 @@ float WeatherDirector::NextUnit()
     return static_cast<float>(m_random >> 8) / static_cast<float>(1u << 24);
 }
 
-float WeatherDirector::Flash(const WeatherTuning& tuning, double nowSeconds)
+bool WeatherDirector::LightningWeather(const WeatherReading& reading) const
 {
-    const bool storm = m_blend[kWeatherRain] >= kStormRainBlend && tuning.lightning > 0.0f;
+    if (reading.overcastWeight > 0.0f)
+        return !reading.ash && reading.thunderOvercast >= kLightestThunderOvercast;
+    return m_blend[kWeatherRain] >= kStormRainBlend;
+}
+
+float WeatherDirector::Flash(const WeatherReading& reading, const WeatherTuning& tuning, double nowSeconds)
+{
+    const bool storm = tuning.lightning > 0.0f && LightningWeather(reading);
     if (!storm)
     {
         m_nextStrike = 0.0;
@@ -158,6 +166,7 @@ float WeatherDirector::Flash(const WeatherTuning& tuning, double nowSeconds)
     if (nowSeconds >= m_nextStrike)
     {
         m_lastStrike = nowSeconds;
+        m_strikeSeed = NextUnit();
         m_nextStrike = nowSeconds + kShortestStrikeGapSeconds +
                        (kLongestStrikeGapSeconds - kShortestStrikeGapSeconds) * NextUnit();
     }
@@ -211,7 +220,8 @@ WeatherLook WeatherDirector::Step(const WeatherReading& reading, const WeatherTu
     look.density *= 1.0f + mist;
     look.variation *= 1.0f + mist;
     look.rainDropsPerSecond = m_blend[kWeatherRain] * kFullRainDropsPerSecond * std::max(tuning.rainRings, 0.0f);
-    look.flash = Flash(tuning, nowSeconds);
+    look.flash = Flash(reading, tuning, nowSeconds);
+    look.strikeSeed = m_strikeSeed;
     look.lowSunRays = std::max(tuning.lowSunRays, 0.0f) * (1.0f - cover);
     look.clearingRays = std::max(tuning.clearingRays, 0.0f) * clearing * clearing;
     return look;

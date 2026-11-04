@@ -60,7 +60,7 @@ This fork ([Raz0r1337/coa-vfog](https://github.com/Raz0r1337/coa-vfog), developm
 - **Authored noise**: drifting fog banks where the Classic layers carry the modern client's noise, mostly in
   storms (`ClassicNoise`).
 - **Weather**: rain, snow, sand and fog bring in each area's storm fog and change the sun, god rays, mist and water,
-  with mist and rays through the clearing after rain, rain rings on water, lightning in heavy rain and dawn mist
+  with mist and rays through the clearing after rain, rain rings on water, lightning in a thunderstorm and dawn mist
   (`WeatherEffects`, and the Weather section of the settings window).
 - **Storm clouds**: clouds in the sky that grow, merge and darken as an overcast builds toward a storm (`StormClouds`).
 - **Density variation**: a two-octave field anchored in world space modulates the scene layers around their
@@ -286,18 +286,19 @@ so without those rows there are no clouds.
 
 The colours come from the light the client has just blended (`0xD38BD4` ambient, `0xD38BD8` direct, `0xD38BE4` middle
 sky), so they follow the zone, the hour, the dark nights, each night brightness level and the overcast's own palette,
-with the thick parts darker the heavier the overcast and darkest under thunder. Lightning uses the director's flash. The
-clouds move with the wind at 20 degrees, up to three times as fast at a heavy overcast, and shift with the camera as a
-deck 1,500 yards up.
+with the thick parts darker the heavier the overcast and darkest under thunder. Lightning uses the director's flash,
+each strike lighting another part of the deck. The clouds move with the wind at 20 degrees, up to three times as fast at
+a heavy overcast, and shift with the camera as a deck 1,500 yards up.
 
 `CloudFairCover` draws them under a clear sky too, to try them as the only clouds. `0xD38C28` is the client's blended
 cloud density (`0x7F056A`) if they ever take that over per zone. None of the look is confirmed in game; the checks cover
 the overcast reading, the cover, the colours' order and the field.
 
 Rain rings are ordinary ripple disturbances at random points around the camera, at most 6 per 30 Hz step, so they share
-the ripple pass's cost and its limit of 48. Lightning is a timer in the DLL, not the client's own strokes, so a flash
-need not match a thunder sound. Its brightness follows the fog's, so a dark night gets a smaller jump than a fixed colour
-would give.
+the ripple pass's cost and its limit of 48. Lightning fires under the thunder palette at a weight of at least 0.4, or
+without an overcast in heavy rain, and not in ash. It's a timer in the DLL, not the client's own strokes, so a flash
+need not match a thunder sound. Its brightness follows the fog's, so a dark night gets a smaller jump than a fixed
+colour would give.
 
 The converter keeps the fog rows the Classic client selects (flag bit 3) at their layer index (0–2). At run
 time the DLL blends the Classic lights around the camera: spheres at full weight inside the falloff start and
@@ -857,7 +858,7 @@ its comments describe every key. In the game, `Ctrl+F7` opens the same settings 
 | `WeatherEaseSeconds` | 30 | Seconds for weather to come in fully or pass |
 | `WeatherAfterRainMist`, `WeatherDryingSeconds` | 0.5, 600 | Extra mist while the ground is wet, and the seconds it takes to dry |
 | `WeatherLowSunRays`, `WeatherClearingRays` | 0.5, 1.0 | God rays in clear weather at a low sun, and as a front passes |
-| `WeatherRainRings`, `WeatherLightning`, `WeatherDawnMist` | 1.0, 1.0, 0.4 | Rain rings on water, flashes in heavy rain, and mist around sunrise; 0 = none |
+| `WeatherRainRings`, `WeatherLightning`, `WeatherDawnMist` | 1.0, 1.0, 0.4 | Rain rings on water, flashes in a thunderstorm, and mist around sunrise; 0 = none |
 | `Rain*`, `Snow*`, `Sand*`, `Fog*` | see `LuxVelum.ini` | Each kind's `Sun`, `Rays`, `Exposure`, `Density`, `Drift`, `Variation`, `Tint`, `Waves`, `Wind`, `Foam` and `Glint` at full intensity |
 | `StockFog` | 1 | 1 replaces the stock fog with the distance fog, 0 keeps it |
 | `TransparentFog` | 0 | 1 fogs see-through effects at their own distance, 0 at the scene behind (see Transparent fog) |
