@@ -127,10 +127,12 @@ void CheckCover()
     Check(Near(CloudShapeFor(none, fair).threshold, 0.7f), "the field is evenly spread, so 30% cover is the top 30%");
     CloudTuning justUnderClosing;
     justUnderClosing.fairCover = 0.79f;
-    Check(Near(CloudShapeFor(none, justUnderClosing).threshold, 0.21f), "below a cover of 0.8 the threshold is 1 - cover");
+    Check(Near(CloudShapeFor(none, justUnderClosing).threshold, 0.21f),
+          "below a cover of 0.8 the threshold is 1 - cover");
     CloudTuning closed;
     closed.fairCover = 1.0f;
-    Check(CloudShapeFor(none, closed).threshold < 0.0f, "a full cover pulls the threshold under 0, so billows leave no gaps");
+    Check(CloudShapeFor(none, closed).threshold < 0.0f,
+          "a full cover pulls the threshold under 0, so billows leave no gaps");
     OvercastReading heavy;
     heavy.weight = 0.8f;
     Check(CloudShapeFor(none, fair).thickRange < CloudShapeFor(heavy, CloudTuning{}).thickRange,
