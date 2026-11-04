@@ -1284,7 +1284,8 @@ void WaterRenderer::FillClassConstants(ShadingConstants& c, const WaterPreset& p
     c.rippleShape = m_rippleShape;
     c.rippleFade = m_rippleFade;
     const WaterFlowPhases flowPhases = ComputeWaterFlowPhases(seconds);
-    c.flow = {std::max(m_cfg.waterFlow, 0.0f), flowPhases.first, flowPhases.second,
+    const bool canFlow = waterClass == WaterClass::Lake || waterClass == WaterClass::River;
+    c.flow = {canFlow ? std::max(m_cfg.waterFlow, 0.0f) : 0.0f, flowPhases.first, flowPhases.second,
               static_cast<float>(kWaterFlowCycleSeconds)};
     for (int slot = 0; slot < kWaterShadedMaskSlots; ++slot)
     {

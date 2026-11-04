@@ -441,7 +441,7 @@ bool DrawWater(Config& c)
     changed |= Slider("Zone colours", c.waterZoneColors, 0.0f, 1.0f, "%.2f",
                       "How much the zone's own water colours from the client's lights tint the water, 0 = the modern "
                       "colours only");
-    changed |= Slider("Flow", c.waterFlow, 0.0f, 3.0f, "%.2f",
+    changed |= Slider("Flow", c.waterFlow, 0.0f, 2.0f, "%.2f",
                       "Waves and foam run downhill on water whose surface slopes, faster where it's steeper, with "
                       "whitewater on the steepest stretches. Flat water stays still. 0 = off");
     changed |= Slider("Ripples", c.waterRipples, 0.0f, 2.0f, "%.2f",

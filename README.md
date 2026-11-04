@@ -378,15 +378,23 @@ and grading blend like the fog, on every map with a placed light.
 ## Water flow
 
 The client's liquid meshes carry a height per vertex and already slope: Elwynn's streams drop about 7 yards over one
-33-yard chunk. So the water pass reads the slope from the water depth it has copied. It reconstructs the surface about 4
-yards to each side of a pixel, at most 12 pixels away, taking whichever side of each axis is flatter so that a bank doesn't
-count as water. That distance reaches over the triangles of the 4-yard liquid grid, whose facets would otherwise show.
+33-yard chunk. So on lakes and rivers the water pass reads the slope from the water depth it has copied. On each screen
+axis it reconstructs the surface about 6 yards to each side of a pixel, a whole number of pixels away (at most 128), because
+the depth copy is point sampled and a fractional offset reads a false slope across flat water. A side counts only if it is
+on water, which is where the pre-water depth lies behind the water's. With both on water it takes the flatter; with neither
+it tries again at 1.5 yards for narrow streams, and failing that treats that axis as flat. Six yards reaches over the
+4-yard triangles of the liquid grid at most distances, though close to the camera the 128-pixel limit makes it shorter.
 
-Waves and foam are then sampled twice at positions moved downhill, half a cycle apart, each layer fully faded out when
-it jumps back (a two-phase flow map). The cycle is 1.6 seconds. Speed is 1.2 yd/s plus 8 per unit of slope, at most 8
-yd/s. Flow fades in between slopes of 0.03 and 0.10, out above 0.9 as a bank, and out from 200 to 320 yards from the
-camera. Slopes above 0.15 add whitewater through the wave foam. Flat water takes the same path as before, so it costs
-nothing beyond reading the slope. `WaterDebugView=7` shows the field: red and green for direction, brighter for stronger.
+Waves and foam are then sampled twice at positions moved downhill, half a cycle apart, each layer fully faded out when it
+jumps back (a two-phase flow map). The cycle is 1.6 seconds. Speed is 1.2 yd/s plus 8 per unit of slope, times `WaterFlow`, at
+most 6 yd/s. Flow fades in between slopes of 0.03 and 0.10, out above 0.9 as a bank, and out from 200 to 320 yards from the
+camera. Slopes above 0.15 add whitewater to the wave foam. Flat water and the sea cost little or nothing: lakes and rivers
+add eight depth reads per pixel within range, sixteen where probes miss water, and sloped pixels add eight tile reads and up
+to five foam mask reads. `WaterDebugView=7` shows the field: red and green for direction, brighter for stronger.
+
+Known limits: the two layers can pulse faintly each 0.8 seconds, since their contrast is restored with one estimate for all
+wave sizes, and sharp kinks in a stream's surface may show lines. Water still appears flat to reflections. Only the flow is
+drawn, so a flat stretch of river stays still.
 
 This is not known to be Forever's method: its shaders weren't readable. In its build the water sampled has zero flow in
 `LiquidObject` and no flow UVs, and its heights match the client's. Not confirmed in game.
@@ -935,10 +943,10 @@ its comments describe every key. In the game, `Ctrl+F7` opens the same settings 
 | `WaterSpecular` | 1 | Sun or moon glint 0..4 |
 | `WaterClarity` | 1 | How far you see into the water 0.25..4 |
 | `WaterZoneColors` | 0.5 | Tint by the zone's own water colours 0..1 |
-| `WaterFlow` | 1.0 | Waves and foam run downhill on sloped water, with whitewater where it's steepest, 0..3; 0 = off |
+| `WaterFlow` | 1.0 | Waves and foam run downhill on sloped water, with whitewater where it's steepest, 0..2; 0 = off |
 | `WaterRipples` | 0.5 | Wakes of units in the water 0..2; 0 = no unit reads and no ripple simulation |
 | `WaterClientSplashes` | 0 | 1 keeps the client's splash and wake sprites; 0 hides them for all units while wakes run |
-| `WaterDebugView` | 0 | 1 wave normals, 2 foam, 3 transmittance, 4 reflection, 5 liquid class, 6 ripple height |
+| `WaterDebugView` | 0 | 1 wave normals, 2 foam, 3 transmittance, 4 reflection, 5 liquid class, 6 ripple height, 7 flow |
 
 Turning `FarClipMax` on from 0 needs a restart; other changes, including 0, apply at the next `farclip` change,
 map load or zone change, where raising it shows a loading screen.

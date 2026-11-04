@@ -172,7 +172,7 @@ const FloatSetting kWaterFloatSettings[] = {
     {"WaterClarity", &Config::waterClarity, 0.25f, 4.0f},
     {"WaterZoneColors", &Config::waterZoneColors, 0.0f, 1.0f},
     {"WaterRipples", &Config::waterRipples, 0.0f, 2.0f},
-    {"WaterFlow", &Config::waterFlow, 0.0f, 3.0f},
+    {"WaterFlow", &Config::waterFlow, 0.0f, 2.0f},
 };
 
 const BoolSetting kBoolSettings[] = {
