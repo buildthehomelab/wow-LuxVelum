@@ -259,7 +259,8 @@ a fade either: the client has three skybox slots (`0x7ED713`, first come, by sky
 being taken away keeps its slot until its fade ends. So the clouds are a pass of their own: `sky_clouds` turns the
 overcast into a cover, and `vf_clouds` keeps the part of an evenly spread noise field above `1 - cover`, so a share of
 the sky is that share of the field and the clouds' edges move outward as the weight rises. The field is one tiling 512 x
-512 texture made at first use, with its body in red, finer detail in green and a slow warp in blue and alpha.
+512 texture, made when the DLL loads and uploaded at first use, with its body in red, finer detail in green and a slow
+warp in blue and alpha.
 
 The pass runs straight after the client's sky pass, from a hook on its one call site: `0x79ACBC E8` to `0x7F09B0`, a
 cdecl call the client skips when `[0xADF580]` is not above 0 (`0x79AC3F`) or `[0xCD8794]` says the camera is in liquid.

@@ -52,7 +52,8 @@ reverse-engineering evidence.
   (Forever glow byte before the fog composite, grading decisions at world done and frame end), `grading_renderer`
   (colour grading pass).
 - `shaders/` — the ps_3_0 passes: `vf_*` fog (march, temporal, composite and its multisampled silhouette split, god
-  rays and their late composite after an early one, depth probe and depth-copy check), `vf_clouds` (storm clouds), `vw_*` water (FFT, ripple
+  rays and their late composite after an early one, depth probe and depth-copy check),
+  `vf_clouds` (storm clouds), `vw_*` water (FFT, ripple
   step, depth copy, shading) and `vp_grade` (colour grading).
 - `tests/harness.cpp` — the offline D3D9 harness; `--scene harbour` renders a logged in-game frame, `--scene ripples`
   units wading through the basin. `tests/shaders/` holds a copy of the client's M2 fog shader for the transparent fog

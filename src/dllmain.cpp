@@ -92,7 +92,8 @@ void Attach(HMODULE module)
     {
         PrepareAuthoredNoise();
         InstallSkyCloudHook();
-        PreparedCloudField();
+        if (cfg.stormClouds)
+            PreparedCloudField();
         InstallTransparentFogHooks();
         EnableForeverLookOnHookedClient();
     }
