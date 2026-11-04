@@ -83,7 +83,6 @@ constexpr uintptr_t kSkyPassEnabled = 0x00D38CCC;
 constexpr uintptr_t kPlaySoundFile = 0x004C9110;
 constexpr int kPlaySoundFileScriptChannel = 4;
 constexpr uintptr_t kFindCVar = 0x00767440;
-constexpr uintptr_t kCVarIntValue = 0x30;
 constexpr const char* kSoundEffectsCVar = "Sound_EnableSFX";
 constexpr const char* kAmbienceSoundCVar = "Sound_EnableAmbience";
 using FindCVarFunction = uintptr_t(__cdecl*)(const char* name);
