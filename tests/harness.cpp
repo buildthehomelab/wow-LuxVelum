@@ -1001,6 +1001,29 @@ void CheckAuthoredFogFollowsClientDirectLight(const FogData& data)
               duskwoodNoon.layers[0].emissive[2] < 0.4f,
           "Darkshire's noon fog is a dim grey-green, not Forever's cyan");
 
+    FogParams clearLook = BuildFogParams(clearDuskwood, cfg, &duskwoodFog);
+    FrameInputs rainy = clearDuskwood;
+    rainy.weather.sun = 0.5f;
+    rainy.weather.density = 1.5f;
+    rainy.weather.exposure = 0.8f;
+    const FogParams rainyLook = BuildFogParams(rainy, cfg, &duskwoodFog);
+    Check(Near(rainyLook.layers[0].density, clearLook.layers[0].density * 1.5f) &&
+              Near(rainyLook.layers[0].diffuse[1], clearLook.layers[0].diffuse[1] * 0.5f) &&
+              Near(rainyLook.weather.exposure, 0.8f),
+          "weather scales the fog's thickness and sun, and carries its exposure to the composite");
+    FrameInputs tinted = clearDuskwood;
+    tinted.weather.tint = 1.0f;
+    tinted.weather.tintColor[0] = 1.0f;
+    tinted.weather.tintColor[1] = 0.0f;
+    tinted.weather.tintColor[2] = 0.0f;
+    const FogParams tintedLook = BuildFogParams(tinted, cfg, &duskwoodFog);
+    Check(tintedLook.layers[0].emissive[0] > 0.0f && tintedLook.layers[0].emissive[1] == 0.0f,
+          "weather tints the fog toward its colour");
+    Check(std::memcmp(clearLook.layers, BuildFogParams(clearDuskwood, cfg, &duskwoodFog).layers,
+                      sizeof(clearLook.layers)) == 0 &&
+              clearLook.weather.exposure == 1.0f,
+          "clear weather leaves the fog's layers alone");
+
     AuthoredFog missingDirectLight = duskwoodFog;
     missingDirectLight.hasClassicDirectLight = false;
     const FogParams uncalibrated = BuildFogParams(clearDuskwood, cfg, &missingDirectLight);
@@ -1916,7 +1939,7 @@ void CheckSettingsWindowKeepsItsSize(Harness& h, const PanelRect& expected, cons
           what);
 }
 
-#include "weather_storm_checks.h"
+#include "weather_director_checks.h"
 #include "authored_fog_checks.h"
 #include "fog_integration_checks.h"
 #include "local_lights_checks.h"
@@ -2002,7 +2025,7 @@ int Run(const std::wstring& outDir, const std::string& dataPath, const std::wstr
     Check(classic.Load(dataPath), "Classic fog data loads");
     CheckClassicData(classic);
     CheckStormBlendsLayersByClassicIndex(classic);
-    weather_storm_checks::Run();
+    weather_director_checks::Run();
     CheckScreenEffectLightSlot(classic);
     CheckZoneLights(classic);
     CheckAuthoredFogFollowsClientDirectLight(classic);

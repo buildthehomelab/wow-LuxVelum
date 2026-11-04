@@ -1,5 +1,6 @@
 #include "settings_panel.h"
 
+#include "engine.h"
 #include "imgui.h"
 
 #include <algorithm>
@@ -181,9 +182,6 @@ bool DrawDensity(Config& c)
                       "Drifting fog banks where the Classic layers carry the modern client's noise, mostly in storms; "
                       "it thins those layers to about half their density on average. Off: the density variation "
                       "above applies to them instead");
-    changed |= Toggle("Weather fog", c.weatherFog,
-                      "Rain, snow and mist bring in the storm fog of the area you're in, by how heavy they are. "
-                      "Off: the clear fog stays in all weather");
     return changed;
 }
 
@@ -215,6 +213,93 @@ bool DrawLight(Config& c)
     changed |= Toggle("Glow compensation", c.glowCompensation,
                       "Pre-compensate the fog for the client's full-screen glow, which otherwise bleaches bright fog "
                       "around the sun to white");
+    return changed;
+}
+
+struct WeatherSlider
+{
+    const char* label;
+    float Config::*members[kWeatherKinds];
+    float hi;
+    const char* help;
+};
+
+const WeatherSlider kWeatherSliders[] = {
+    {"Sun", {&Config::rainSun, &Config::snowSun, &Config::sandSun, &Config::fogSun}, 2.0f,
+     "Sun and moon scattered into the fog; lower hides the sun behind the weather"},
+    {"Rays", {&Config::rainRays, &Config::snowRays, &Config::sandRays, &Config::fogRays}, 2.0f,
+     "How much of the god rays stay in this weather"},
+    {"Exposure", {&Config::rainExposure, &Config::snowExposure, &Config::sandExposure, &Config::fogExposure}, 2.0f,
+     "Brightness of the fog"},
+    {"Thickness", {&Config::rainDensity, &Config::snowDensity, &Config::sandDensity, &Config::fogDensity}, 4.0f,
+     "How thick the fog gets"},
+    {"Drift", {&Config::rainDrift, &Config::snowDrift, &Config::sandDrift, &Config::fogDrift}, 6.0f,
+     "How fast the mist patches move"},
+    {"Patchiness", {&Config::rainVariation, &Config::snowVariation, &Config::sandVariation, &Config::fogVariation},
+     4.0f, "How uneven the mist looks"},
+    {"Tint", {&Config::rainTint, &Config::snowTint, &Config::sandTint, &Config::fogTint}, 1.0f,
+     "How far the fog turns to this weather's colour instead of the area's"},
+    {"Waves", {&Config::rainWaves, &Config::snowWaves, &Config::sandWaves, &Config::fogWaves}, 2.5f,
+     "Wave height on modern water"},
+    {"Wind", {&Config::rainWind, &Config::snowWind, &Config::sandWind, &Config::fogWind}, 4.0f,
+     "Wind on modern water; stronger makes longer, rougher waves"},
+    {"Foam", {&Config::rainFoam, &Config::snowFoam, &Config::sandFoam, &Config::fogFoam}, 4.0f,
+     "Foam on wave crests and shores"},
+    {"Glint", {&Config::rainGlint, &Config::snowGlint, &Config::sandGlint, &Config::fogGlint}, 2.0f,
+     "Sun and moon highlight on water"},
+};
+
+const char* const kWeatherKindNames[kWeatherKinds] = {"Rain", "Snow", "Sandstorm", "Fog"};
+
+void DrawWeatherNow()
+{
+    const WeatherReading reading = engine::LastWeatherReading();
+    const WeatherLook look = engine::LastWeatherLook();
+    const int kind = WeatherKindOf(reading.type, reading.intensity);
+    ImGui::Text("Now: %s, intensity %.2f", kind == kNoWeatherKind ? "clear" : kWeatherKindNames[kind],
+                reading.intensity);
+    ImGui::Text("Storm fog %.2f, sun %.2f, thickness %.2f, wet ground %.2f", look.stormBlend, look.sun, look.density,
+                look.wetness);
+}
+
+bool DrawWeatherKind(Config& c, int kind)
+{
+    bool changed = false;
+    if (!ImGui::TreeNode(kWeatherKindNames[kind]))
+        return false;
+    for (const WeatherSlider& slider : kWeatherSliders)
+    {
+        ImGui::PushID(kind);
+        changed |= Slider(slider.label, c.*slider.members[kind], 0.0f, slider.hi, "%.2f", slider.help);
+        ImGui::PopID();
+    }
+    ImGui::TreePop();
+    return changed;
+}
+
+bool DrawWeather(Config& c)
+{
+    const Section section("Weather");
+    if (!section)
+        return false;
+    DrawWeatherNow();
+    bool changed = Toggle("Weather effects", c.weatherEffects,
+                          "Rain, snow, sand and fog change the fog, sun, god rays and water. Off: the clear look stays "
+                          "in all weather");
+    changed |= Slider("Strength", c.weatherStrength, 0.0f, 2.0f, "%.2f",
+                      "How strongly weather changes the look. The area's own storm fog doesn't scale with this");
+    changed |= Slider("Change time", c.weatherEaseSeconds, 1.0f, 300.0f, "%.0f s",
+                      "Seconds for weather to come in fully or pass");
+    changed |= Slider("After-rain mist", c.weatherAfterRainMist, 0.0f, 2.0f, "%.2f",
+                      "Extra mist while the ground is still wet after rain or snow");
+    changed |= Slider("Drying time", c.weatherDryingSeconds, 30.0f, 3600.0f, "%.0f s",
+                      "Seconds for the ground to dry after rain or snow");
+    changed |= Slider("Low-sun rays", c.weatherLowSunRays, 0.0f, 4.0f, "%.2f",
+                      "God rays in clear weather when the sun or moon is low");
+    changed |= Slider("Clearing rays", c.weatherClearingRays, 0.0f, 4.0f, "%.2f",
+                      "God rays breaking through as a front passes, while the ground is still wet");
+    for (int kind = 0; kind < kWeatherKinds; ++kind)
+        changed |= DrawWeatherKind(c, kind);
     return changed;
 }
 
@@ -371,6 +456,7 @@ bool SettingsPanel::DrawSettings(Config& edited, const FogFrameStatus& fogStatus
     bool changed = DrawQuality(edited);
     changed |= DrawDensity(edited);
     changed |= DrawLight(edited);
+    changed |= DrawWeather(edited);
     changed |= DrawGlowAndGrading(edited);
     changed |= DrawWorld(edited);
     changed |= DrawAntialiasing(edited);

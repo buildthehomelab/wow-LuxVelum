@@ -1360,7 +1360,8 @@ bool Renderer::RenderPasses(IDirect3DDevice9* dev, const SceneDepth& depth, IDir
         sunPx[1] = vp.Y + (0.5f - ndcY * 0.5f) * vp.Height;
         sunScreenFade = std::clamp(1.6f - std::max(std::fabs(ndcX), std::fabs(ndcY)), 0.0f, 1.0f);
     }
-    const float rayStrength = cfg.godRays * fog.lightVisibility * sunScreenFade;
+    const float rayStrength =
+        WeatherGodRayStrength(cfg.godRays, fog.weather, in.toLight[2]) * fog.lightVisibility * sunScreenFade;
     const bool rays = rayStrength > kMinGodRayStrength;
     const bool raysAfterWorld = rays && pass == FogPass::BeforeTransparents;
     const bool raysNow = rays && !raysAfterWorld;
@@ -1443,8 +1444,14 @@ bool Renderer::RenderPasses(IDirect3DDevice9* dev, const SceneDepth& depth, IDir
     BindWrappedVolume(dev, 9, m_densityNoise);
     UploadLayerNoise(dev, fog, in.camPos, now);
     const double windPeriod = static_cast<double>(kDensityNoiseSize) / std::max(cfg.noiseScale, 0.001f);
-    const Float4 variation = {m_densityNoise ? cfg.noiseAmount : 0.0f, cfg.noiseScale,
-                              static_cast<float>(std::fmod(TickSeconds(now) * cfg.noiseWindSpeed, windPeriod)), 0.0f};
+    const double windElapsed = m_weatherWindTicks ? TickSeconds(now - m_weatherWindTicks) : 0.0;
+    m_weatherWindTicks = now;
+    m_weatherWindPhase =
+        std::fmod(m_weatherWindPhase + windElapsed * cfg.noiseWindSpeed * (fog.weather.drift - 1.0f), windPeriod);
+    const float noiseAmount = std::min(cfg.noiseAmount * fog.weather.variation, 1.0f);
+    const Float4 variation = {m_densityNoise ? noiseAmount : 0.0f, cfg.noiseScale,
+                              static_cast<float>(std::fmod(TickSeconds(now) * cfg.noiseWindSpeed + m_weatherWindPhase,
+                                                           windPeriod)), 0.0f};
     dev->SetPixelShaderConstantF(78, &variation.x, 1);
     BindTexture(dev, 0, depthTexture, false);
     DrawFullscreenTriangle(dev);
@@ -1495,7 +1502,8 @@ bool Renderer::RenderPasses(IDirect3DDevice9* dev, const SceneDepth& depth, IDir
     dev->SetPixelShaderConstantF(12, &compositeMarchFog.layers[0].start, 6 * kFogLayers);
     m_drawnGlowCompensation = cfg.glowCompensation && sceneBlend ? in.clientGlowAmount : 0.0f;
     const Float4 composite[3] = {
-        {fog.authored ? cfg.classicExposure : cfg.exposure, raysNow && sceneBlend ? rayStrength : 0.0f,
+        {(fog.authored ? cfg.classicExposure : cfg.exposure) * fog.weather.exposure,
+         raysNow && sceneBlend ? rayStrength : 0.0f,
          static_cast<float>(cfg.debugView), blendMode},
         {fog.rayColor[0], fog.rayColor[1], fog.rayColor[2], 0.0f},
         {sunPx[0], sunPx[1], cfg.sunMarker && sunInFront ? 1.0f : 0.0f, m_drawnGlowCompensation},

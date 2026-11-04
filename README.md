@@ -59,7 +59,8 @@ This fork ([Raz0r1337/coa-vfog](https://github.com/Raz0r1337/coa-vfog), developm
   the interior's native fog colour and range.
 - **Authored noise**: drifting fog banks where the Classic layers carry the modern client's noise, mostly in
   storms (`ClassicNoise`).
-- **Weather fog**: rain, snow and mist bring in each area's storm fog by how heavy they are (`WeatherFog`).
+- **Weather**: rain, snow, sand and fog bring in each area's storm fog and change the sun, god rays, mist and water,
+  with mist and rays through the clearing after rain (`WeatherEffects`, and the Weather section of the settings window).
 - **Density variation**: a two-octave field anchored in world space modulates the scene layers around their
   authored mean and drifts along world +X; the distance fog stays smooth so it cannot uncover the far clip. This
   is an artistic control, not a reconstruction of Classic's authored noise.
@@ -233,12 +234,15 @@ It also appends unused grading curves, one by default. A launcher that compares 
 edit as up to date, so players who already have the file would never receive it. Each version that ships needs a size
 no earlier version had: raise `--unused-curves` by one whenever the tool's constants change.
 
-**Weather and the storm slot.** The client never fills its own storm weight: `0xD38B88` is `0xD38B4C` times a constant
-(`0x7F3978`), and the only write to `0xD38B4C` is a zero at start-up (`0x7F2854`). So the DLL takes the weight from the
-weather object at `[0xCD7544]`, which `SMSG_WEATHER` sets through `0x7846A0`. `+0x20` holds the type from `Weather.dbc`
-and `+0x08` the intensity the client ramps each frame (`0x784850`). Clear weather counts as 0 whatever its grade, because
-a server can send clear skies with a low grade. The weight then eases at the full range per 30 seconds, and the first
-reading applies at once. `0x7846A0` and `0x784850` are read from the code; the weather's look isn't confirmed in game.
+**Weather.** The client never fills its own storm weight: `0xD38B88` is `0xD38B4C` times a constant (`0x7F3978`), and
+the only write to `0xD38B4C` is a zero at start-up (`0x7F2854`). So `WeatherDirector` takes it from the weather object
+at `[0xCD7544]`, which `SMSG_WEATHER` sets through `0x7846A0`: `+0x20` holds the type from `Weather.dbc`, and `+0x00` the
+latest intensity. The `+0x08` value the client ramps each frame (`0x784850`) isn't used, because it lags a change of type
+and clear weather right after rain would read as fog. `Weather.dbc` gives fog (state 1) type 0, so type 0 with an
+intensity of at least 0.27 counts as fog: below that a server sends clear skies. Sandstorms there are white, so the tint
+colours are the DLL's own. Each kind eases on its own, so rain turning to snow fades across. They go to the frame in
+`FrameInputs::weather`, not through `Config`, because a changed setting resets the temporal history. `0x7846A0` and
+`0x784850` are read from the code, and how any of this looks isn't confirmed in game.
 
 The converter keeps the fog rows the Classic client selects (flag bit 3) at their layer index (0–2). At run
 time the DLL blends the Classic lights around the camera: spheres at full weight inside the falloff start and
@@ -367,7 +371,7 @@ Gx is the graphics device `[0xC5DF88]`.
 | Visible sun / moon sprite, sky centre | `0xD38E28`, `0xD38E48`, `0xD38B18` (day window `[0xA41CA4, 0xA41CA0]`) |
 | Camera in liquid | `0xCD8794` |
 | Client's storm weight (0..1), always 0 in this build | `0xD38B88` |
-| Weather object; its smoothed intensity and type (0 none, 1 rain, 2 snow, 3 mist and sand) | `[0xCD7544]`, `+0x08`, `+0x20` |
+| Weather object; its latest intensity and type (0 none or fog, 1 rain, 2 snow, 3 sand) | `[0xCD7544]`, `+0x00`, `+0x20` |
 | Light params slot forced by the current screen effect (−1 = none) | `0xD38B58` |
 | Glow: `ffx` CVar, current effect, glow effect, glow amount | `0xD45774`, `0xD45780`, `0xB74364`, `0xD38C2C` |
 | Ghost (death) screen effect | `0xB74368` |
@@ -788,7 +792,12 @@ its comments describe every key. In the game, `Ctrl+F7` opens the same settings 
 | `NoiseScale` | 0.025 | Inverse feature size of the variation |
 | `NoiseWindSpeed` | 0.5 | Drift of the variation along world +X in yd/s |
 | `ClassicNoise` | 1 | The modern client's authored noise on the Classic layers that carry it (mostly storms); 0 = off |
-| `WeatherFog` | 1 | Rain, snow and mist bring in each area's storm fog by how heavy they are; 0 = the clear fog in all weather |
+| `WeatherEffects` | 1 | Weather changes the fog, sun, god rays and water; 0 = the clear look in all weather |
+| `WeatherStrength` | 1.0 | How strongly weather changes the look, 0..2; the storm fog doesn't scale with this |
+| `WeatherEaseSeconds` | 30 | Seconds for weather to come in fully or pass |
+| `WeatherAfterRainMist`, `WeatherDryingSeconds` | 0.5, 600 | Extra mist while the ground is wet, and the seconds it takes to dry |
+| `WeatherLowSunRays`, `WeatherClearingRays` | 0.5, 1.0 | God rays in clear weather at a low sun, and as a front passes |
+| `Rain*`, `Snow*`, `Sand*`, `Fog*` | see `LuxVelum.ini` | Each kind's `Sun`, `Rays`, `Exposure`, `Density`, `Drift`, `Variation`, `Tint`, `Waves`, `Wind`, `Foam` and `Glint` at full intensity |
 | `StockFog` | 1 | 1 replaces the stock fog with the distance fog, 0 keeps it |
 | `TransparentFog` | 0 | 1 fogs see-through effects at their own distance, 0 at the scene behind (see Transparent fog) |
 | `DataMode` | 1 | 1 Classic layers where available, 0 derived layers everywhere |

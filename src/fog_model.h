@@ -74,8 +74,10 @@ struct FogParams
     float farLimit;
     bool linear;
     bool authored;
+    WeatherLook weather;
 };
 
+WeatherLook OutdoorWeatherLook(const FrameInputs& in, const Config& cfg);
 void UnpackColor(uint32_t argb, float* rgb);
 FogParams BuildFogParams(const FrameInputs& in, const Config& cfg, const AuthoredFog* authored);
 PointLightUpload LocalLightUpload(const Config& cfg);

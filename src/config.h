@@ -1,5 +1,7 @@
 #pragma once
 
+#include "weather_director.h"
+
 #include <string>
 
 constexpr float kEngineFarClipMin = 183.333f;
@@ -52,7 +54,21 @@ struct Config
     float noiseScale = 0.025f;
     float noiseWindSpeed = 0.5f;
     bool classicNoise = true;
-    bool weatherFog = true;
+    bool weatherEffects = true;
+    float weatherStrength = 1.0f;
+    float weatherEaseSeconds = 30.0f;
+    float weatherAfterRainMist = 0.5f;
+    float weatherDryingSeconds = 600.0f;
+    float weatherLowSunRays = 0.5f;
+    float weatherClearingRays = 1.0f;
+    float rainSun = 0.35f, rainRays = 0.0f, rainExposure = 0.85f, rainDensity = 1.25f, rainDrift = 2.5f,
+          rainVariation = 2.0f, rainTint = 0.0f, rainWaves = 1.35f, rainWind = 2.0f, rainFoam = 1.6f, rainGlint = 0.25f;
+    float snowSun = 0.5f, snowRays = 0.0f, snowExposure = 1.05f, snowDensity = 1.3f, snowDrift = 0.6f,
+          snowVariation = 1.2f, snowTint = 0.35f, snowWaves = 0.8f, snowWind = 0.8f, snowFoam = 0.8f, snowGlint = 0.4f;
+    float sandSun = 0.4f, sandRays = 0.0f, sandExposure = 0.9f, sandDensity = 1.5f, sandDrift = 3.0f,
+          sandVariation = 2.5f, sandTint = 0.65f, sandWaves = 1.2f, sandWind = 1.5f, sandFoam = 1.2f, sandGlint = 0.3f;
+    float fogSun = 0.45f, fogRays = 0.0f, fogExposure = 0.95f, fogDensity = 1.8f, fogDrift = 1.0f,
+          fogVariation = 1.5f, fogTint = 0.5f, fogWaves = 0.8f, fogWind = 0.6f, fogFoam = 0.8f, fogGlint = 0.5f;
     float godRays = 0.0f;
     bool glowCompensation = true;
     int foreverGlow = 0;
@@ -80,6 +96,7 @@ struct Config
     int waterDebugView = 0;
 };
 
+WeatherTuning WeatherTuningFrom(const Config& config);
 bool SameFogSettings(const Config& a, const Config& b);
 bool SameLiveSettings(const Config& a, const Config& b);
 std::string SettingChanges(const Config& before, const Config& after);

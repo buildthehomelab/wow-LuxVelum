@@ -299,6 +299,29 @@ float InteriorWeight(const FrameInputs& in, const Config& cfg)
                : 0.0f;
 }
 
+void TintTowardWeather(float* rgb, const float* tint, float amount)
+{
+    const float luminance = 0.2126f * rgb[0] + 0.7152f * rgb[1] + 0.0722f * rgb[2];
+    for (int channel = 0; channel < 3; ++channel)
+        rgb[channel] += (luminance * tint[channel] - rgb[channel]) * amount;
+}
+
+void ApplyWeatherTint(const WeatherLook& weather, FogParams& fog)
+{
+    if (weather.tint <= 0.0f)
+        return;
+    float tint[3] = {weather.tintColor[0], weather.tintColor[1], weather.tintColor[2]};
+    Encode(tint, fog.linear);
+    for (FogLayer& layer : fog.layers)
+    {
+        TintTowardWeather(layer.emissive, tint, weather.tint);
+        TintTowardWeather(layer.shadowEmissive, tint, weather.tint);
+        TintTowardWeather(layer.diffuse, tint, weather.tint);
+    }
+    for (LayerNoise& noise : fog.noise)
+        TintTowardWeather(noise.fade, tint, weather.tint);
+}
+
 void ApplyInteriorFog(float weight, const Config& cfg, FogParams& fog)
 {
     const float retainedDensity = std::isfinite(cfg.interiorDensity) ? std::clamp(cfg.interiorDensity, 0.0f, 1.0f)
@@ -334,9 +357,19 @@ void UnpackColor(uint32_t argb, float* rgb)
     rgb[2] = static_cast<float>(argb & 0xFF) / 255.0f;
 }
 
-FogParams BuildFogParams(const FrameInputs& in, const Config& cfg, const AuthoredFog* authored)
+WeatherLook OutdoorWeatherLook(const FrameInputs& in, const Config& cfg)
 {
+    return NeutralWeatherLook(in.weather, 1.0f - InteriorWeight(in, cfg));
+}
+
+FogParams BuildFogParams(const FrameInputs& in, const Config& settings, const AuthoredFog* authored)
+{
+    Config cfg = settings;
+    const WeatherLook weather = OutdoorWeatherLook(in, settings);
+    cfg.sunScatter *= weather.sun;
+    cfg.density *= weather.density;
     FogParams p = {};
+    p.weather = weather;
     p.linear = ScattersInLinearLight(cfg);
     p.authored = authored != nullptr;
     const float interiorWeight = InteriorWeight(in, cfg);
@@ -376,6 +409,7 @@ FogParams BuildFogParams(const FrameInputs& in, const Config& cfg, const Authore
         DerivedLayers(in, cfg, p, elevationFadedScatter, fogDistance, fogColor, p.layers);
         DistanceLayer(in, cfg, p, elevationFadedScatter, fogColor, distanceFog);
     }
+    ApplyWeatherTint(weather, p);
     ApplyInteriorFog(interiorWeight, cfg, p);
     return p;
 }

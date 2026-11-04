@@ -7,6 +7,7 @@
 #include "engine_actors.h"
 #include "engine_lights.h"
 #include "water_types.h"
+#include "weather_director.h"
 
 #include <cstdint>
 
@@ -32,6 +33,7 @@ struct FrameInputs
     bool inLiquid;
     int mapId;
     LightParamsSelection lightParams;
+    WeatherLook weather;
     LocalLightInputs localLights;
 };
 
@@ -141,6 +143,8 @@ bool HasOpaqueState();
 bool OpaqueViewport(D3DVIEWPORT9& out);
 void ClearOpaqueState();
 
+WeatherReading LastWeatherReading();
+WeatherLook LastWeatherLook();
 bool BuildFrameInputs(FrameInputs& out, bool withPointLights, const PointLightUpload& upload);
 bool BuildWaterInputs(WaterInputs& out);
 bool WaterClientLayoutMatches();

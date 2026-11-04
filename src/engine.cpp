@@ -5,7 +5,6 @@
 
 #include "log.h"
 #include "water_classify.h"
-#include "weather_storm.h"
 
 #include <algorithm>
 #include <cmath>
@@ -72,7 +71,7 @@ constexpr uintptr_t kSunDayStart = 0x00A41CA4;
 constexpr uintptr_t kDayNightScreenEffectLightSlot = 0x00D38B58;
 constexpr uintptr_t kDayNightStormBlend = 0x00D38B88;
 constexpr uintptr_t kMapWeather = 0x00CD7544;
-constexpr uintptr_t kMapWeatherIntensity = 0x08;
+constexpr uintptr_t kMapWeatherIntensity = 0x00;
 constexpr uintptr_t kMapWeatherType = 0x20;
 
 constexpr uintptr_t kLightSkyColors[kSkyColorCount] = {0x00D38BE0, 0x00D38BE4, 0x00D38BE8,
@@ -363,14 +362,36 @@ bool FindGlowCompositePassesUnsafe(const ScreenEffects& effects, GlowCompositePa
 
 double ClockSeconds();
 
-float EasedWeatherStormBlend()
+WeatherReading g_weatherReading;
+WeatherLook g_weatherLook;
+
+WeatherReading ReadClientWeather()
 {
-    static WeatherStormEase ease;
+    WeatherReading reading;
     const uintptr_t weather = Read<uintptr_t>(kMapWeather);
-    const float target = weather ? WeatherStormTarget(Read<int32_t>(weather + kMapWeatherType),
-                                                      Read<float>(weather + kMapWeatherIntensity))
-                                 : 0.0f;
-    return ease.Step(target, ClockSeconds());
+    if (weather)
+    {
+        reading.type = Read<int32_t>(weather + kMapWeatherType);
+        reading.intensity = Read<float>(weather + kMapWeatherIntensity);
+    }
+    return reading;
+}
+
+void StepWeatherLook(const Config& cfg)
+{
+    static WeatherDirector director;
+    if (!cfg.weatherEffects)
+    {
+        g_weatherReading = {};
+        g_weatherLook = {};
+        return;
+    }
+    const WeatherReading reading = ReadClientWeather();
+    if (WeatherKindOf(reading.type, reading.intensity) !=
+        WeatherKindOf(g_weatherReading.type, g_weatherReading.intensity))
+        VF_LOG_INFO("weather: client type %d, intensity %.2f", reading.type, reading.intensity);
+    g_weatherReading = reading;
+    g_weatherLook = director.Step(reading, WeatherTuningFrom(cfg), ClockSeconds());
 }
 
 LightParamsSelection ReadLightParamsSelection()
@@ -378,8 +399,8 @@ LightParamsSelection ReadLightParamsSelection()
     LightParamsSelection selection;
     const float storm = Read<float>(kDayNightStormBlend);
     selection.stormBlend = std::isfinite(storm) ? std::clamp(storm, 0.0f, 1.0f) : 0.0f;
-    if (GlobalConfig().Get().weatherFog)
-        selection.stormBlend = std::max(selection.stormBlend, EasedWeatherStormBlend());
+    StepWeatherLook(GlobalConfig().Get());
+    selection.stormBlend = std::max(selection.stormBlend, g_weatherLook.stormBlend);
     const int32_t slot = Read<int32_t>(kDayNightScreenEffectLightSlot);
     if (slot >= 0 && slot < FogData::kLightParamsSlots)
         selection.screenEffectSlot = slot;
@@ -452,6 +473,7 @@ bool BuildFrameInputsUnsafe(FrameInputs& out, bool withPointLights, const PointL
     out.inLiquid = CameraInLiquid();
     out.mapId = Read<int32_t>(kCurrentMap);
     out.lightParams = ReadLightParamsSelection();
+    out.weather = g_weatherLook;
     const LocalLightCamera lightCamera = FrameLightCamera(out);
     CaptureLocalLightInputs(lightCamera, withPointLights, upload, out.localLights);
     if (withPointLights)
@@ -950,6 +972,16 @@ bool OpaqueViewport(D3DVIEWPORT9& out)
 void ClearOpaqueState()
 {
     g_opaque.valid = false;
+}
+
+WeatherReading LastWeatherReading()
+{
+    return g_weatherReading;
+}
+
+WeatherLook LastWeatherLook()
+{
+    return g_weatherLook;
 }
 
 bool BuildFrameInputs(FrameInputs& out, bool withPointLights, const PointLightUpload& upload)

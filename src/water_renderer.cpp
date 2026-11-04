@@ -20,6 +20,8 @@
 
 namespace
 {
+constexpr float kMinWeatherWaterWind = 0.5f;
+constexpr float kMaxWeatherWaterWind = 10.0f;
 constexpr UINT kWaterPixelConstants = 72;
 constexpr DWORD kWaterSamplerStages = 16;
 constexpr UINT kCommonConstants = 9;
@@ -995,6 +997,11 @@ bool WaterRenderer::Begin(IDirect3DDevice9* dev, const SceneDepth& depth, const 
     m_in = in;
     m_water = water;
     m_cfg = cfg;
+    const WeatherLook weather = OutdoorWeatherLook(in, cfg);
+    m_cfg.waterWaves *= weather.waves;
+    m_cfg.waterWind = std::clamp(m_cfg.waterWind * weather.wind, kMinWeatherWaterWind, kMaxWeatherWaterWind);
+    m_cfg.waterFoam *= weather.foam;
+    m_cfg.waterSpecular *= weather.glint;
     std::fill(std::begin(m_draws), std::end(m_draws), 0u);
     m_armed = true;
     return true;
@@ -1293,7 +1300,7 @@ void WaterRenderer::BuildReflectionFog()
                              GlobalFogData().Resolve(m_in.mapId, m_in.camPos, m_in.dayFraction, m_in.lightParams,
                                                      authored);
     const FogParams fog = WithMeanNoise(BuildFogParams(m_in, m_cfg, hasAuthored ? &authored : nullptr));
-    const float exposure = fog.authored ? m_cfg.classicExposure : m_cfg.exposure;
+    const float exposure = (fog.authored ? m_cfg.classicExposure : m_cfg.exposure) * fog.weather.exposure;
     auto linearScattered = [&fog, exposure](const float* rgb) {
         float out[3];
         for (int c = 0; c < 3; ++c)

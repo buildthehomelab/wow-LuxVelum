@@ -171,6 +171,8 @@ private:
     D3DVIEWPORT9 m_prevViewport = {};
     UINT m_prevScale = 0;
     long long m_prevTicks = 0;
+    long long m_weatherWindTicks = 0;
+    double m_weatherWindPhase = 0.0;
     unsigned m_frame = 0;
     unsigned m_logged = 0;
     long long m_summaryTicks = 0;
