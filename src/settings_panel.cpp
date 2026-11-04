@@ -302,6 +302,9 @@ bool DrawStormClouds(Config& c)
     changed |= Slider("Cloud darkness", c.cloudDarkness, 0.25f, 3.0f, "%.2f", "How dark the thick parts get");
     changed |= Slider("Cloud opacity", c.cloudOpacity, 0.0f, 1.0f, "%.2f", "How solid the clouds are");
     changed |= Slider("Cloud wind", c.cloudWind, 0.0f, 8.0f, "%.2f", "How fast the clouds move");
+    changed |= Slider("Clouds through fog", c.cloudsThroughFog, 0.0f, 10.0f, "%.1f",
+                      "Under an overcast, thins the area's fog toward the sky so the clouds show through a storm. The "
+                      "fog on land and along the horizon stays. 0 = the same fog everywhere");
     return changed;
 }
 

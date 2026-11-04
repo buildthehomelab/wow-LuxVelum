@@ -1018,6 +1018,12 @@ void CheckAuthoredFogFollowsClientDirectLight(const FogData& data)
     drifting.weather.drift = 3.0f;
     Check(Near(BuildFogParams(drifting, cfg, &noisyFog).noise[0].velocity[0][0], 6.0f),
           "weather drives the area's own drifting fog banks too");
+    FrameInputs overcastSky = clearDuskwood;
+    overcastSky.weather.skyFogThinning = 3.0f;
+    const FogParams overcastLook = BuildFogParams(overcastSky, cfg, &duskwoodFog);
+    Check(overcastLook.layers[0].skyFalloff == 3.0f && overcastLook.layers[2].skyFalloff == 3.0f &&
+              overcastLook.layers[0].density == BuildFogParams(clearDuskwood, cfg, &duskwoodFog).layers[0].density,
+          "an overcast thins the scene layers toward the sky without thinning them over land");
     FogParams clearLook = BuildFogParams(clearDuskwood, cfg, &duskwoodFog);
     FrameInputs rainy = clearDuskwood;
     rainy.weather.sun = 0.5f;

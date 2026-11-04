@@ -96,6 +96,7 @@ const FloatSetting kFloatSettings[] = {
     {"CloudDarkness", &Config::cloudDarkness, 0.25f, 3.0f},
     {"CloudOpacity", &Config::cloudOpacity, 0.0f, 1.0f},
     {"CloudWind", &Config::cloudWind, 0.0f, 8.0f},
+    {"CloudsThroughFog", &Config::cloudsThroughFog, 0.0f, 10.0f},
     {"WeatherBolts", &Config::weatherBolts, 0.0f, 1.5f},
     {"WeatherStrength", &Config::weatherStrength, 0.0f, 2.0f},
     {"WeatherEaseSeconds", &Config::weatherEaseSeconds, 1.0f, 300.0f},
@@ -501,6 +502,7 @@ WeatherTuning WeatherTuningFrom(const Config& c)
     t.rainRings = c.weatherRainRings;
     t.lightning = c.weatherLightning;
     t.dawnMist = c.weatherDawnMist;
+    t.cloudsThroughFog = c.stormClouds ? c.cloudsThroughFog : 0.0f;
     static const float kTintColors[kWeatherKinds][3] = {
         {0.70f, 0.75f, 0.80f}, {0.85f, 0.92f, 1.00f}, {0.78f, 0.62f, 0.40f}, {0.78f, 0.80f, 0.82f},
         {0.45f, 0.42f, 0.40f}};

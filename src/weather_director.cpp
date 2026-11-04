@@ -276,6 +276,7 @@ WeatherLook WeatherDirector::Step(const WeatherReading& reading, const WeatherTu
     look.variation *= 1.0f + mist;
     look.rainDropsPerSecond = m_blend[kWeatherRain] * kFullRainDropsPerSecond * std::max(tuning.rainRings, 0.0f);
     look.flash = Flash(reading, tuning, nowSeconds);
+    look.skyFogThinning = std::max(tuning.cloudsThroughFog, 0.0f) * std::clamp(reading.overcastWeight, 0.0f, 1.0f);
     look.strikeSeed = m_strikeSeed;
     look.strikeAsked = m_strikeAsked;
     look.thunderClip = DueThunderClip(nowSeconds);

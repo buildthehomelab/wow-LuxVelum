@@ -63,6 +63,7 @@ struct Config
     float cloudDarkness = 1.0f;
     float cloudOpacity = 1.0f;
     float cloudWind = 1.0f;
+    float cloudsThroughFog = 4.0f;
     float weatherBolts = 1.0f;
     bool weatherThunder = true;
     float weatherStrength = 1.0f;
