@@ -182,6 +182,7 @@ const BoolSetting kBoolSettings[] = {
     {"ClassicNoise", &Config::classicNoise},       {"TransparentFog", &Config::transparentFog},
     {"WeatherEffects", &Config::weatherEffects},
     {"StormClouds", &Config::stormClouds},
+    {"WeatherThunder", &Config::weatherThunder},
 };
 
 const BoolSetting kWaterBoolSettings[] = {

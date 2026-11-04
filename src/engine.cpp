@@ -80,6 +80,17 @@ constexpr uintptr_t kMapWeatherRainEffect = 0x13C;
 constexpr uintptr_t kMapWeatherSnowEffect = 0x140;
 constexpr uintptr_t kMapWeatherSandEffect = 0x144;
 constexpr uintptr_t kSkyPassEnabled = 0x00D38CCC;
+constexpr uintptr_t kPlaySoundFile = 0x004C9110;
+constexpr int kPlaySoundFileScriptChannel = 4;
+using PlaySoundFileFunction = int(__cdecl*)(const char* file, int channel);
+constexpr const char* kThunderClipFiles[kThunderClips] = {
+    "Sound\\Ambience\\Weather\\ThunderNear01.mp3",   "Sound\\Ambience\\Weather\\ThunderNear02.mp3",
+    "Sound\\Ambience\\Weather\\ThunderNear03.mp3",   "Sound\\Ambience\\Weather\\ThunderNear04.mp3",
+    "Sound\\Ambience\\Weather\\ThunderMiddle01.mp3", "Sound\\Ambience\\Weather\\ThunderMiddle02.mp3",
+    "Sound\\Ambience\\Weather\\ThunderMiddle03.mp3", "Sound\\Ambience\\Weather\\ThunderFar01.mp3",
+    "Sound\\Ambience\\Weather\\ThunderFar02.mp3",    "Sound\\Ambience\\Weather\\ThunderFar03.mp3",
+    "Sound\\Ambience\\Weather\\ThunderFar04.mp3",
+};
 constexpr uintptr_t kLightSwapCount = 0x00D39018;
 constexpr uintptr_t kLightSwapEntries = 0x00D3901C;
 constexpr uintptr_t kLightSwapStride = 0x18;
@@ -120,6 +131,10 @@ struct CodeBytes
     size_t size;
     unsigned char bytes[kMaxCodeBytes];
 };
+
+constexpr CodeBytes kPlaySoundFileCode = {
+    "PlaySoundFile entry", kPlaySoundFile, 13,
+    {0x55, 0x8B, 0xEC, 0x51, 0xF6, 0x05, 0x20, 0xAD, 0xB4, 0x00, 0x01, 0x75, 0x1B}};
 
 const CodeBytes kLightRecordStores[] = {
     {"light record copy destination", 0x007F3574, 5, {0xB9, 0xD4, 0x8B, 0xD3, 0x00}},
@@ -428,6 +443,15 @@ OvercastReading ReadClientOvercast()
     return reading;
 }
 
+bool CodeBytesMatch(const CodeBytes& code);
+
+void PlayThunderClip(int clip)
+{
+    static const bool clientMatches = CodeBytesMatch(kPlaySoundFileCode);
+    if (clientMatches && clip >= 0 && clip < kThunderClips)
+        reinterpret_cast<PlaySoundFileFunction>(kPlaySoundFile)(kThunderClipFiles[clip], kPlaySoundFileScriptChannel);
+}
+
 void StepWeatherLook(const Config& cfg)
 {
     static WeatherDirector director;
@@ -451,6 +475,8 @@ void StepWeatherLook(const Config& cfg)
                     reading.intensity);
     g_weatherReading = reading;
     g_weatherLook = director.Step(reading, WeatherTuningFrom(cfg), ClockSeconds());
+    if (cfg.weatherThunder && g_weatherLook.thunderClip != kNoThunderClip)
+        PlayThunderClip(g_weatherLook.thunderClip);
 }
 
 LightParamsSelection ReadLightParamsSelection()

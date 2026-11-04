@@ -310,6 +310,12 @@ two strokes included, so `WeatherLightning` at 0 also stops bolts. None of this 
 the settings window fires one at once, ahead of the camera, whatever the weather. It needs `WeatherEffects` on and
 `WeatherLightning` above 0, and bolts need the cloud pass, so a sky with no clouds has flashes only.
 
+**Thunder.** Each strike schedules one clip: near (a quarter, 0.2 to 0.8 s after the flash), middle (about a third, 1 to
+2.5 s) or far (the rest, 3 to 6 s), and **Strike now** is always near. The DLL calls the client's `PlaySoundFile` function
+(`0x4C9110`, as `0x9859EF` does, with the file and channel 4), checked against the 12340 bytes first, so `Sound_EnableSFX`
+and the effects volume apply. Clips are `Sound\Ambience\Weather\Thunder{Near,Middle,Far}NN.mp3`, from the client patches
+(wow-server `weather.py`). A missing file plays nothing. `WeatherThunder=0` silences it.
+
 Rain rings are ordinary ripple disturbances at random points around the camera, at most 6 per 30 Hz step, so they share
 the ripple pass's cost and its limit of 48. Lightning fires under the thunder palette at a weight of at least 0.4, or
 without an overcast in heavy rain, and not in ash or for 15 seconds after it, as the palette fades more slowly than the
@@ -876,6 +882,7 @@ its comments describe every key. In the game, `Ctrl+F7` opens the same settings 
 | `WeatherLowSunRays`, `WeatherClearingRays` | 0.5, 1.0 | God rays in clear weather at a low sun, and as a front passes |
 | `WeatherRainRings`, `WeatherLightning`, `WeatherDawnMist` | 1.0, 0.8, 0.4 | Rain rings on water, flashes in a thunderstorm, and mist around sunrise; 0 = none |
 | `WeatherBolts` | 1.0 | How bright the lightning bolts are, 0..1.5; 0 = flashes only |
+| `WeatherThunder` | 1 | Thunder after each strike; 0 = silent |
 | `Rain*`, `Snow*`, `Sand*`, `Fog*` | see `LuxVelum.ini` | Each kind's `Sun`, `Rays`, `Exposure`, `Density`, `Drift`, `Variation`, `Tint`, `Waves`, `Wind`, `Foam` and `Glint` at full intensity |
 | `StockFog` | 1 | 1 replaces the stock fog with the distance fog, 0 keeps it |
 | `TransparentFog` | 0 | 1 fogs see-through effects at their own distance, 0 at the scene behind (see Transparent fog) |

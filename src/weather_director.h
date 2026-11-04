@@ -8,6 +8,8 @@ constexpr int32_t kClientWeatherSnow = 2;
 constexpr int32_t kClientWeatherSand = 3;
 constexpr int32_t kClientWeatherNoRequest = -1;
 constexpr float kClientFogMinimumIntensity = 0.27f;
+constexpr int kNoThunderClip = -1;
+constexpr int kThunderClips = 11;
 
 enum WeatherKind
 {
@@ -86,6 +88,7 @@ struct WeatherLook
     float flash = 0.0f;
     float strikeSeed = 0.0f;
     bool strikeAsked = false;
+    int thunderClip = kNoThunderClip;
 };
 
 int32_t LiveClientWeatherType(int32_t requested, bool rainEffect, bool snowEffect, bool sandEffect);
@@ -108,6 +111,8 @@ private:
     bool LightningWeather(const WeatherReading& reading, double nowSeconds);
     float Flash(const WeatherReading& reading, const WeatherTuning& tuning, double nowSeconds);
     void Strike(double nowSeconds, bool asked);
+    void ScheduleThunder(double nowSeconds, bool asked);
+    int DueThunderClip(double nowSeconds);
     float NextUnit();
 
     bool m_started = false;
@@ -122,6 +127,8 @@ private:
     double m_lastStrike = -1000.0;
     float m_strikeSeed = 0.0f;
     bool m_strikeAsked = false;
+    double m_thunderAt = 0.0;
+    int m_thunderClip = kNoThunderClip;
     double m_lastAshSeconds = -1000.0;
     uint32_t m_random = 0x51F15EEDu;
 };

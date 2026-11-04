@@ -5,6 +5,7 @@
 
 #include <cmath>
 #include <cstdio>
+#include <algorithm>
 #include <limits>
 
 namespace weather_director_checks
@@ -452,6 +453,43 @@ void CheckLightning()
         }
     }
     Check(!naturalStrikeTooSoon, "a storm's own strikes wait 8 seconds after a strike asked for");
+
+    WeatherDirector rumbling;
+    int thunders = 0;
+    int thunderStrikes = 0;
+    float thunderSeed = 0.0f;
+    double strikeTime = 0.0;
+    double longestDelay = 0.0;
+    bool clipsInRange = true;
+    for (int frame = 0; frame < kFrames; ++frame)
+    {
+        const double now = kStart + frame * kFrame;
+        const WeatherLook look = rumbling.Step(thunderOnly, tuning, now);
+        if (look.strikeSeed != thunderSeed)
+        {
+            thunderSeed = look.strikeSeed;
+            strikeTime = now;
+            ++thunderStrikes;
+        }
+        if (look.thunderClip != kNoThunderClip)
+        {
+            ++thunders;
+            longestDelay = std::max(longestDelay, now - strikeTime);
+            clipsInRange = clipsInRange && look.thunderClip >= 0 && look.thunderClip < kThunderClips;
+        }
+    }
+    Check(thunders >= thunderStrikes - 1 && thunders <= thunderStrikes, "every strike is followed by one thunder");
+    Check(longestDelay <= 6.1, "thunder follows within 6 seconds");
+    Check(clipsInRange, "thunder names a clip that exists");
+
+    WeatherDirector askedThunder;
+    WeatherReading quiet;
+    askedThunder.Step(button, tuning, kStart);
+    double askedHeardAfter = -1.0;
+    for (int frame = 1; frame < 60 && askedHeardAfter < 0.0; ++frame)
+        if (askedThunder.Step(quiet, tuning, kStart + frame * kFrame).thunderClip != kNoThunderClip)
+            askedHeardAfter = frame * kFrame;
+    Check(askedHeardAfter >= 0.1 && askedHeardAfter <= 0.9, "a strike asked for is close, so it's heard almost at once");
 
     tuning.lightning = 0.0f;
     WeatherDirector askedWhenOff;

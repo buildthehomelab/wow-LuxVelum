@@ -27,6 +27,21 @@ constexpr double kFlashRiseSeconds = 0.03;
 constexpr float kLightestThunderOvercast = 0.4f;
 constexpr double kAshOvercastFadeSeconds = 15.0;
 
+struct ThunderBand
+{
+    double shortestDelay;
+    double longestDelay;
+    int firstClip;
+    int clips;
+};
+
+constexpr ThunderBand kNearThunder = {0.2, 0.8, 0, 4};
+constexpr ThunderBand kMiddleThunder = {1.0, 2.5, 4, 3};
+constexpr ThunderBand kFarThunder = {3.0, 6.0, 7, 4};
+constexpr float kNearThunderShare = 0.25f;
+constexpr float kMiddleThunderShare = 0.35f;
+static_assert(kFarThunder.firstClip + kFarThunder.clips == kThunderClips, "every clip belongs to a band");
+
 float Mix(float from, float to, float amount)
 {
     return from + (to - from) * amount;
@@ -157,11 +172,31 @@ bool WeatherDirector::LightningWeather(const WeatherReading& reading, double now
     return m_blend[kWeatherRain] >= kStormRainBlend;
 }
 
+void WeatherDirector::ScheduleThunder(double nowSeconds, bool asked)
+{
+    const float distance = asked ? 0.0f : NextUnit();
+    const ThunderBand& band = distance < kNearThunderShare                       ? kNearThunder
+                              : distance < kNearThunderShare + kMiddleThunderShare ? kMiddleThunder
+                                                                                  : kFarThunder;
+    m_thunderAt = nowSeconds + band.shortestDelay + (band.longestDelay - band.shortestDelay) * NextUnit();
+    m_thunderClip = band.firstClip + std::min(static_cast<int>(NextUnit() * band.clips), band.clips - 1);
+}
+
+int WeatherDirector::DueThunderClip(double nowSeconds)
+{
+    if (m_thunderClip == kNoThunderClip || nowSeconds < m_thunderAt)
+        return kNoThunderClip;
+    const int clip = m_thunderClip;
+    m_thunderClip = kNoThunderClip;
+    return clip;
+}
+
 void WeatherDirector::Strike(double nowSeconds, bool asked)
 {
     m_lastStrike = nowSeconds;
     m_strikeSeed = NextUnit();
     m_strikeAsked = asked;
+    ScheduleThunder(nowSeconds, asked);
 }
 
 float WeatherDirector::Flash(const WeatherReading& reading, const WeatherTuning& tuning, double nowSeconds)
@@ -240,6 +275,7 @@ WeatherLook WeatherDirector::Step(const WeatherReading& reading, const WeatherTu
     look.flash = Flash(reading, tuning, nowSeconds);
     look.strikeSeed = m_strikeSeed;
     look.strikeAsked = m_strikeAsked;
+    look.thunderClip = DueThunderClip(nowSeconds);
     look.lowSunRays = std::max(tuning.lowSunRays, 0.0f) * (1.0f - cover);
     look.clearingRays = std::max(tuning.clearingRays, 0.0f) * clearing * clearing;
     return look;
