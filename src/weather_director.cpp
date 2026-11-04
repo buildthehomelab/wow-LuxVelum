@@ -157,8 +157,17 @@ bool WeatherDirector::LightningWeather(const WeatherReading& reading, double now
     return m_blend[kWeatherRain] >= kStormRainBlend;
 }
 
+void WeatherDirector::Strike(double nowSeconds, bool asked)
+{
+    m_lastStrike = nowSeconds;
+    m_strikeSeed = NextUnit();
+    m_strikeAsked = asked;
+}
+
 float WeatherDirector::Flash(const WeatherReading& reading, const WeatherTuning& tuning, double nowSeconds)
 {
+    if (reading.strikeRequested && tuning.lightning > 0.0f)
+        Strike(nowSeconds, true);
     const bool storm = LightningWeather(reading, nowSeconds) && tuning.lightning > 0.0f;
     if (!storm)
     {
@@ -170,8 +179,7 @@ float WeatherDirector::Flash(const WeatherReading& reading, const WeatherTuning&
                                 m_lastStrike + kShortestStrikeGapSeconds);
     if (nowSeconds >= m_nextStrike)
     {
-        m_lastStrike = nowSeconds;
-        m_strikeSeed = NextUnit();
+        Strike(nowSeconds, false);
         m_nextStrike = nowSeconds + kShortestStrikeGapSeconds +
                        (kLongestStrikeGapSeconds - kShortestStrikeGapSeconds) * NextUnit();
     }
@@ -227,6 +235,7 @@ WeatherLook WeatherDirector::Step(const WeatherReading& reading, const WeatherTu
     look.rainDropsPerSecond = m_blend[kWeatherRain] * kFullRainDropsPerSecond * std::max(tuning.rainRings, 0.0f);
     look.flash = Flash(reading, tuning, nowSeconds);
     look.strikeSeed = m_strikeSeed;
+    look.strikeAsked = m_strikeAsked;
     look.lowSunRays = std::max(tuning.lowSunRays, 0.0f) * (1.0f - cover);
     look.clearingRays = std::max(tuning.clearingRays, 0.0f) * clearing * clearing;
     return look;

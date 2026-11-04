@@ -96,6 +96,7 @@ const FloatSetting kFloatSettings[] = {
     {"CloudDarkness", &Config::cloudDarkness, 0.25f, 3.0f},
     {"CloudOpacity", &Config::cloudOpacity, 0.0f, 1.0f},
     {"CloudWind", &Config::cloudWind, 0.0f, 8.0f},
+    {"WeatherBolts", &Config::weatherBolts, 0.0f, 1.5f},
     {"WeatherStrength", &Config::weatherStrength, 0.0f, 2.0f},
     {"WeatherEaseSeconds", &Config::weatherEaseSeconds, 1.0f, 300.0f},
     {"WeatherAfterRainMist", &Config::weatherAfterRainMist, 0.0f, 2.0f},

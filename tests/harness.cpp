@@ -1955,6 +1955,7 @@ void CheckSettingsWindowKeepsItsSize(Harness& h, const PanelRect& expected, cons
 
 #include "weather_director_checks.h"
 #include "sky_clouds_checks.h"
+#include "lightning_bolt_checks.h"
 #include "authored_fog_checks.h"
 #include "fog_integration_checks.h"
 #include "local_lights_checks.h"
@@ -2042,6 +2043,7 @@ int Run(const std::wstring& outDir, const std::string& dataPath, const std::wstr
     CheckStormBlendsLayersByClassicIndex(classic);
     weather_director_checks::Run();
     sky_clouds_checks::Run();
+    lightning_bolt_checks::Run();
     CheckScreenEffectLightSlot(classic);
     CheckZoneLights(classic);
     CheckAuthoredFogFollowsClientDirectLight(classic);

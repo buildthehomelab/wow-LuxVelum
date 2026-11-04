@@ -407,6 +407,7 @@ WeatherReading ReadClientWeather()
 }
 
 OvercastReading g_overcast;
+bool g_strikeRequested = false;
 
 OvercastReading ReadClientOvercast()
 {
@@ -441,6 +442,8 @@ void StepWeatherLook(const Config& cfg)
     const OvercastReading overcast = OvercastWithPreview(g_overcast, CloudTuningFrom(cfg));
     reading.overcastWeight = overcast.weight;
     reading.thunderOvercast = overcast.weight * overcast.share[kOvercastStorm];
+    reading.strikeRequested = g_strikeRequested;
+    g_strikeRequested = false;
     if (WeatherKindOf(reading.type, reading.intensity, reading.ash) !=
         WeatherKindOf(g_weatherReading.type, g_weatherReading.intensity, g_weatherReading.ash))
         VF_LOG_INFO("weather: client type %d%s, intensity %.2f", reading.type, reading.ash ? " (ash)" : "",
@@ -1047,6 +1050,11 @@ WeatherLook LastWeatherLook()
     return g_weatherLook;
 }
 
+void RequestLightningStrike()
+{
+    g_strikeRequested = true;
+}
+
 OvercastReading LastOvercast()
 {
     return g_overcast;
@@ -1072,6 +1080,7 @@ bool BuildSkyCloudInputs(IDirect3DDevice9* device, SkyCloudInputs& out)
         out.overcast = g_overcast;
         out.flash = g_weatherLook.flash;
         out.strikeSeed = g_weatherLook.strikeSeed;
+        out.strikeAsked = g_weatherLook.strikeAsked;
         return true;
     }
     __except (EXCEPTION_EXECUTE_HANDLER)

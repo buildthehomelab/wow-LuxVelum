@@ -5,6 +5,7 @@
 #include "fog_data.h"
 #include "fog_model.h"
 #include "gpu_timing.h"
+#include "lightning_bolt.h"
 #include "msaa_depth.h"
 #include "transparent_fog.h"
 
@@ -103,6 +104,9 @@ private:
     void BindWrappedVolume(IDirect3DDevice9* dev, DWORD stage, IDirect3DVolumeTexture9* volume);
     bool EnsureCloudField(IDirect3DDevice9* dev);
     bool EnsureCloudShader(IDirect3DDevice9* dev);
+    bool EnsureBoltShaders(IDirect3DDevice9* dev);
+    void UpdateBolt(const SkyCloudInputs& in, const float* viewToWorld);
+    void DrawBolt(IDirect3DDevice9* dev, const SkyCloudInputs& in, const Config& cfg);
     void StepCloudDrift(const OvercastReading& overcast, const Config& cfg, long long now);
     void LogCloudOvercast(const OvercastReading& overcast);
     void LogCloudCost(IDirect3DDevice9* dev, long long now);
@@ -140,6 +144,9 @@ private:
     IDirect3DPixelShader9* m_rayComposite = nullptr;
     IDirect3DPixelShader9* m_probe = nullptr;
     IDirect3DPixelShader9* m_clouds = nullptr;
+    IDirect3DVertexShader9* m_boltVs = nullptr;
+    IDirect3DPixelShader9* m_boltPs = nullptr;
+    IDirect3DVertexDeclaration9* m_boltDecl = nullptr;
     IDirect3DVertexDeclaration9* m_decl = nullptr;
     IDirect3DStateBlock9* m_state = nullptr;
 
@@ -189,6 +196,9 @@ private:
     long long m_cloudTicks = 0;
     long long m_cloudSummaryTicks = 0;
     CloudDrift m_cloudDrift;
+    LightningBolt m_bolt;
+    float m_boltSeed = -1.0f;
+    std::vector<BoltVertex> m_boltVertices;
     float m_loggedOvercast = -1.0f;
     unsigned m_frame = 0;
     unsigned m_logged = 0;

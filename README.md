@@ -63,6 +63,7 @@ This fork ([Raz0r1337/coa-vfog](https://github.com/Raz0r1337/coa-vfog), developm
   with mist and rays through the clearing after rain, rain rings on water, lightning in a thunderstorm and dawn mist
   (`WeatherEffects`, and the Weather section of the settings window).
 - **Storm clouds**: clouds in the sky that grow, merge and darken as an overcast builds toward a storm (`StormClouds`).
+- **Lightning bolts**: bolts fork down from the clouds behind the land in a thunderstorm (`WeatherBolts`).
 - **Density variation**: a two-octave field anchored in world space modulates the scene layers around their
   authored mean and drifts along world +X; the distance fog stays smooth so it cannot uncover the far clip. This
   is an artistic control, not a reconstruction of Classic's authored noise.
@@ -293,6 +294,15 @@ a heavy overcast, and shift with the camera as a deck 1,500 yards up.
 `CloudFairCover` draws them under a clear sky too, to try them as the only clouds. `0xD38C28` is the client's blended
 cloud density (`0x7F056A`) if they ever take that over per zone. None of the look is confirmed in game; the checks cover
 the overcast reading, the cover, the colours' order and the field.
+
+**Lightning bolts.** Three strikes in four draw a bolt; the rest only light up the clouds. A strike's seed picks the
+shape: a channel jagged by midpoint displacement, from 16 to 32 degrees up to just below the horizon, with two to six
+branches that fade to their tips. Most land within 45 degrees of where the camera looks when they strike, and the bolt then
+stays at that place in the sky. It is drawn right after the clouds, in the same pass and added to them, as ribbons a fixed
+number of pixels wide, so the land, trees and buildings drawn later cover its foot, and the bolt lights the clouds around
+its top. Its brightness follows the strike's flash, two strokes included, so `WeatherLightning` at 0 also stops bolts. None
+of this is seen in game yet. **Strike now** in the settings window fires one at once, ahead of the camera, whatever the
+weather, with clouds on screen; bolts need the cloud pass, so a sky with no clouds has flashes only.
 
 Rain rings are ordinary ripple disturbances at random points around the camera, at most 6 per 30 Hz step, so they share
 the ripple pass's cost and its limit of 48. Lightning fires under the thunder palette at a weight of at least 0.4, or
@@ -859,6 +869,7 @@ its comments describe every key. In the game, `Ctrl+F7` opens the same settings 
 | `WeatherAfterRainMist`, `WeatherDryingSeconds` | 0.5, 600 | Extra mist while the ground is wet, and the seconds it takes to dry |
 | `WeatherLowSunRays`, `WeatherClearingRays` | 0.5, 1.0 | God rays in clear weather at a low sun, and as a front passes |
 | `WeatherRainRings`, `WeatherLightning`, `WeatherDawnMist` | 1.0, 0.8, 0.4 | Rain rings on water, flashes in a thunderstorm, and mist around sunrise; 0 = none |
+| `WeatherBolts` | 1.0 | How bright the lightning bolts are, 0..1.5; 0 = flashes only |
 | `Rain*`, `Snow*`, `Sand*`, `Fog*` | see `LuxVelum.ini` | Each kind's `Sun`, `Rays`, `Exposure`, `Density`, `Drift`, `Variation`, `Tint`, `Waves`, `Wind`, `Foam` and `Glint` at full intensity |
 | `StockFog` | 1 | 1 replaces the stock fog with the distance fog, 0 keeps it |
 | `TransparentFog` | 0 | 1 fogs see-through effects at their own distance, 0 at the scene behind (see Transparent fog) |

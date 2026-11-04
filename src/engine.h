@@ -52,6 +52,7 @@ struct SkyCloudInputs
     OvercastReading overcast;
     float flash;
     float strikeSeed;
+    bool strikeAsked;
 };
 
 constexpr int kSkyColorCount = 6;
@@ -165,6 +166,7 @@ void ClearOpaqueState();
 WeatherReading LastWeatherReading();
 WeatherLook LastWeatherLook();
 OvercastReading LastOvercast();
+void RequestLightningStrike();
 bool BuildSkyCloudInputs(IDirect3DDevice9* device, SkyCloudInputs& out);
 bool BuildFrameInputs(FrameInputs& out, bool withPointLights, const PointLightUpload& upload);
 bool BuildWaterInputs(WaterInputs& out);

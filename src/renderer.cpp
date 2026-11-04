@@ -33,6 +33,7 @@
 #include "ps_noisy_split_composite_high.h"
 #include "ps_noisy_split_composite_low.h"
 #include "ps_noisy_split_composite_mid.h"
+#include "ps_bolt.h"
 #include "ps_clouds.h"
 #include "ps_probe.h"
 #include "ps_ray_blur.h"
@@ -44,6 +45,7 @@
 #include "ps_split_composite_mid.h"
 #include "ps_temporal.h"
 #include "ps_history_depth.h"
+#include "vs_bolt.h"
 #include "vs_fullscreen.h"
 
 #include <algorithm>
@@ -77,6 +79,11 @@ constexpr float kCloudTileWidth = 6.0f;
 constexpr float kCloudCurvature = 0.12f;
 constexpr float kCloudSunGlow = 0.5f;
 constexpr float kCloudStrikeWander = 7.0f;
+constexpr float kBoltHalfWidthPixelsAt1080 = 11.0f;
+constexpr float kReferenceScreenHeight = 1080.0f;
+constexpr float kBoltGain = 2.2f;
+constexpr float kFaintestBoltFlash = 0.015f;
+constexpr float kBoltColour[3] = {0.82f, 0.88f, 1.0f};
 constexpr float kCloudLoggedStepsPerWeight = 20.0f;
 constexpr double kCloudSummarySeconds = 60.0;
 constexpr float kSummarySeconds = 60.0f;
@@ -449,6 +456,9 @@ void Renderer::ReleaseAll()
     SafeRelease(m_rayComposite);
     SafeRelease(m_probe);
     SafeRelease(m_clouds);
+    SafeRelease(m_boltVs);
+    SafeRelease(m_boltPs);
+    SafeRelease(m_boltDecl);
     SafeRelease(m_cloudField);
     SafeRelease(m_decl);
 }
@@ -1046,6 +1056,56 @@ void Renderer::LogCloudCost(IDirect3DDevice9* dev, long long now)
         VF_LOG_INFO("storm clouds: %s", gpuTime);
 }
 
+void Renderer::UpdateBolt(const SkyCloudInputs& in, const float* viewToWorld)
+{
+    if (in.strikeSeed == m_boltSeed)
+        return;
+    m_boltSeed = in.strikeSeed;
+    const float forward[3] = {viewToWorld[8], viewToWorld[9], viewToWorld[10]};
+    const float azimuth = BoltAzimuthFacing(forward, in.strikeSeed, in.strikeAsked);
+    m_bolt = BuildLightningBolt(in.strikeSeed, azimuth, in.strikeAsked);
+}
+
+bool Renderer::EnsureBoltShaders(IDirect3DDevice9* dev)
+{
+    static const D3DVERTEXELEMENT9 kBoltElements[] = {
+        {0, 0, D3DDECLTYPE_FLOAT4, D3DDECLMETHOD_DEFAULT, D3DDECLUSAGE_POSITION, 0},
+        {0, 16, D3DDECLTYPE_FLOAT2, D3DDECLMETHOD_DEFAULT, D3DDECLUSAGE_TEXCOORD, 0},
+        D3DDECL_END(),
+    };
+    if (!m_boltVs && FAILED(dev->CreateVertexShader(reinterpret_cast<const DWORD*>(g_vs_bolt), &m_boltVs)))
+        return false;
+    if (!m_boltPs && FAILED(dev->CreatePixelShader(reinterpret_cast<const DWORD*>(g_ps_bolt), &m_boltPs)))
+        return false;
+    return m_boltDecl || SUCCEEDED(dev->CreateVertexDeclaration(kBoltElements, &m_boltDecl));
+}
+
+void Renderer::DrawBolt(IDirect3DDevice9* dev, const SkyCloudInputs& in, const Config& cfg)
+{
+    if (!m_bolt.visible || in.flash < kFaintestBoltFlash || cfg.weatherBolts <= 0.0f || !EnsureBoltShaders(dev))
+        return;
+    const D3DVIEWPORT9& vp = in.viewport;
+    const float* proj = in.glProjection;
+    const BoltCamera camera = {in.cameraRelativeView,
+                               {proj[0], proj[5], proj[8], proj[9]},
+                               {static_cast<float>(vp.Width) * 0.5f, static_cast<float>(vp.Height) * 0.5f},
+                               kBoltHalfWidthPixelsAt1080 * static_cast<float>(vp.Height) / kReferenceScreenHeight};
+    m_boltVertices.clear();
+    AddBoltRibbons(m_bolt, camera, m_boltVertices);
+    if (m_boltVertices.empty())
+        return;
+    const Float4 colour = {kBoltColour[0], kBoltColour[1], kBoltColour[2],
+                           std::min(in.flash * kBoltGain, 1.0f) * cfg.weatherBolts};
+    dev->SetVertexShader(m_boltVs);
+    dev->SetVertexDeclaration(m_boltDecl);
+    dev->SetPixelShader(m_boltPs);
+    dev->SetPixelShaderConstantF(0, &colour.x, 1);
+    dev->SetRenderState(D3DRS_SRCBLEND, D3DBLEND_ONE);
+    dev->SetRenderState(D3DRS_DESTBLEND, D3DBLEND_ONE);
+    dev->DrawPrimitiveUP(D3DPT_TRIANGLELIST, static_cast<UINT>(m_boltVertices.size() / 3), m_boltVertices.data(),
+                         sizeof(BoltVertex));
+}
+
 void Renderer::DrawSkyClouds(IDirect3DDevice9* dev, const SkyCloudInputs& in, const Config& cfg,
                              const OvercastReading& overcast, const CloudShape& shape, const CloudTuning& tuning)
 {
@@ -1080,7 +1140,9 @@ void Renderer::DrawSkyClouds(IDirect3DDevice9* dev, const SkyCloudInputs& in, co
     const CloudColours colours = CloudColoursFor(light, overcast, tuning);
 
     const double yardsPerTile = kCloudDeckHeightYards * kCloudTileWidth;
-    const Float4 constants[8] = {
+    UpdateBolt(in, viewToWorld);
+    const float boltGlow = m_bolt.visible && cfg.weatherBolts > 0.0f ? 1.0f : 0.0f;
+    const Float4 constants[9] = {
         {shape.threshold, shape.softness, shape.thickRange, 0.0f},
         {static_cast<float>(m_cloudDrift.windU), static_cast<float>(m_cloudDrift.windV),
          static_cast<float>(m_cloudDrift.warpU), static_cast<float>(m_cloudDrift.warpV)},
@@ -1092,11 +1154,12 @@ void Renderer::DrawSkyClouds(IDirect3DDevice9* dev, const SkyCloudInputs& in, co
         {in.toLight[0], in.toLight[1], in.toLight[2], 0.0f},
         {sun[0], sun[1], sun[2], kCloudSunGlow},
         {in.strikeSeed, in.strikeSeed * kCloudStrikeWander, in.flash, 0.0f},
+        {m_bolt.topDirection[0], m_bolt.topDirection[1], m_bolt.topDirection[2], boltGlow},
     };
 
     PrepareFullscreenPasses(dev);
     dev->SetPixelShaderConstantF(0, &common[0][0], 9);
-    dev->SetPixelShaderConstantF(kCloudConstantsRegister, &constants[0].x, 8);
+    dev->SetPixelShaderConstantF(kCloudConstantsRegister, &constants[0].x, 9);
     const RECT world = ViewportRect(vp);
     dev->SetViewport(&vp);
     dev->SetScissorRect(&world);
@@ -1118,8 +1181,9 @@ void Renderer::DrawSkyClouds(IDirect3DDevice9* dev, const SkyCloudInputs& in, co
     if (LogEnabled(LogLevel::Info))
         m_cloudTimer.Begin(dev);
     DrawFullscreenTriangle(dev);
-    m_cloudTimer.End();
     dev->SetSamplerState(0, D3DSAMP_MIPMAPLODBIAS, clientLodBias);
+    DrawBolt(dev, in, cfg);
+    m_cloudTimer.End();
 }
 
 bool Renderer::EnsureCloudShader(IDirect3DDevice9* dev)

@@ -94,6 +94,8 @@ vf_shader(ps_probe vf_probe.hlsl ps_3_0)
 vf_shader(ps_depth_check vf_depth_check.hlsl ps_3_0)
 vf_shader(ps_grade vp_grade.hlsl ps_3_0)
 vf_shader(ps_clouds vf_clouds.hlsl ps_3_0)
+vf_shader(vs_bolt vf_bolt_vs.hlsl vs_3_0)
+vf_shader(ps_bolt vf_bolt.hlsl ps_3_0)
 vf_shader(vs_client_m2_fog ../tests/shaders/client_m2_fog_vs.hlsl vs_3_0)
 vf_shader(ps_client_m2_fog ../tests/shaders/client_m2_fog_ps.hlsl ps_3_0)
 include(cmake/WaterFftShaders.cmake)
@@ -137,6 +139,7 @@ add_library(LuxVelum SHARED
     src/fog_model.cpp
     src/weather_director.cpp
     src/sky_clouds.cpp
+    src/lightning_bolt.cpp
     src/water_rain.cpp
     src/forever_look.cpp
     src/gpu_timing.cpp
@@ -171,7 +174,7 @@ target_compile_definitions(version PRIVATE WIN32_LEAN_AND_MEAN)
 add_executable(vfog_harness tests/harness.cpp src/client_code.cpp src/client_light_stay.cpp
                src/client_ripple_sprites.cpp src/config.cpp src/engine_actors.cpp
                src/engine_lights.cpp src/local_light_stabiliser.cpp
-               src/fog_data.cpp src/fog_model.cpp src/weather_director.cpp src/sky_clouds.cpp src/water_rain.cpp
+               src/fog_data.cpp src/fog_model.cpp src/weather_director.cpp src/sky_clouds.cpp src/lightning_bolt.cpp src/water_rain.cpp
                src/gpu_timing.cpp src/log.cpp src/noise_volume.cpp
                src/transparent_fog.cpp src/water_contacts.cpp src/water_data.cpp src/water_spectrum.cpp
                src/water_fft.cpp src/water_ripples.cpp src/status_log.cpp)

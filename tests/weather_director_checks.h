@@ -426,7 +426,19 @@ void CheckLightning()
     Check(seedHeld, "a strike's place holds while it flashes");
     Check(seedMoved, "each strike lights another place");
 
+    WeatherDirector asked;
+    WeatherReading clearSky;
+    asked.Step(clearSky, tuning, kStart);
+    WeatherReading button = clearSky;
+    button.strikeRequested = true;
+    asked.Step(button, tuning, kStart + kFrame);
+    const WeatherLook struck = asked.Step(clearSky, tuning, kStart + 2 * kFrame);
+    Check(struck.flash > 0.5f && struck.strikeAsked, "a strike asked for fires at once, even under a clear sky");
+
     tuning.lightning = 0.0f;
+    WeatherDirector askedWhenOff;
+    askedWhenOff.Step(button, tuning, kStart);
+    Check(askedWhenOff.Step(clearSky, tuning, kStart + kFrame).flash == 0.0f, "lightning at 0 ignores the button too");
     WeatherDirector off;
     heavy.intensity = 1.0f;
     anyFlash = false;
