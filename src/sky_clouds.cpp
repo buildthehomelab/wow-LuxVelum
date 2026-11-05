@@ -20,6 +20,10 @@ constexpr float kThickestThickRange = 0.55f;
 constexpr float kThickRangePerCover = 0.6f;
 constexpr float kBillowPullWhenClosing = 0.2f;
 constexpr float kStartsClosingAtCover = 0.8f;
+constexpr float kMiddleOfScatteredCloud = 0.4f;
+constexpr float kMiddleOfClosedDeck = 0.8f;
+constexpr float kMiddleStartsRisingAtCover = 0.55f;
+constexpr float kMiddleFullyRisenAtCover = 0.9f;
 constexpr float kLightestOvercast = 0.15f;
 constexpr float kHeaviestOvercast = 0.8f;
 constexpr float kBellyAtLightestOvercast = 0.72f;
@@ -271,6 +275,8 @@ CloudShape CloudShapeFor(const OvercastReading& reading, const CloudTuning& tuni
     shape.threshold =
         1.0f - shape.cover - kBillowPullWhenClosing * SmoothShare(kStartsClosingAtCover, 1.0f, shape.cover);
     shape.thickRange = std::clamp(shape.cover * kThickRangePerCover, kThinnestThickRange, kThickestThickRange);
+    shape.middle = Mix(kMiddleOfScatteredCloud, kMiddleOfClosedDeck,
+                       SmoothShare(kMiddleStartsRisingAtCover, kMiddleFullyRisenAtCover, shape.cover));
     shape.opacity = std::clamp(tuning.opacity, 0.0f, 1.0f);
     return shape;
 }

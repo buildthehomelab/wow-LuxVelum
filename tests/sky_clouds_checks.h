@@ -137,6 +137,28 @@ void CheckCover()
     heavy.weight = 0.8f;
     Check(CloudShapeFor(none, fair).thickRange < CloudShapeFor(heavy, CloudTuning{}).thickRange,
           "small clouds have a shallower relief scale, so they keep their shape");
+    const float scatteredMiddle = CloudShapeFor(none, fair).middle;
+    Check(Near(scatteredMiddle, 0.4f), "scattered clouds have room to round both above and below their middle");
+    CloudTuning lastScattered;
+    lastScattered.fairCover = 0.55f;
+    Check(Near(CloudShapeFor(none, lastScattered).middle, 0.4f), "the middle stays put until a cover of 0.55");
+    CloudTuning firstClosed;
+    firstClosed.fairCover = 0.9f;
+    Check(Near(CloudShapeFor(none, firstClosed).middle, 0.8f), "from a cover of 0.9 the deck hangs its furthest");
+    float lastMiddle = 0.0f;
+    bool middleRises = true;
+    bool middleStaysInside = true;
+    for (int percent = 0; percent <= 100; ++percent)
+    {
+        CloudTuning growing;
+        growing.fairCover = static_cast<float>(percent) / 100.0f;
+        const float middle = CloudShapeFor(none, growing).middle;
+        middleRises = middleRises && middle >= lastMiddle;
+        middleStaysInside = middleStaysInside && middle > 0.0f && middle < 1.0f;
+        lastMiddle = middle;
+    }
+    Check(middleRises, "the underside only hangs further as the cover rises");
+    Check(middleStaysInside, "the middle stays inside the deck, so the shader's division by each side is safe");
 }
 
 void CheckColours()
