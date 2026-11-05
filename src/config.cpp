@@ -174,6 +174,12 @@ const FloatSetting kWaterFloatSettings[] = {
     {"WaterZoneColors", &Config::waterZoneColors, 0.0f, 1.0f},
     {"WaterRipples", &Config::waterRipples, 0.0f, 2.0f},
     {"WaterFlow", &Config::waterFlow, 0.0f, 2.0f},
+    {"UnderwaterClarity", &Config::underwaterClarity, 0.25f, 4.0f},
+    {"UnderwaterCaustics", &Config::underwaterCaustics, 0.0f, 2.0f},
+    {"UnderwaterShafts", &Config::underwaterShafts, 0.0f, 2.0f},
+    {"UnderwaterSurface", &Config::underwaterSurface, 0.0f, 1.0f},
+    {"UnderwaterWobble", &Config::underwaterWobble, 0.0f, 2.0f},
+    {"UnderwaterDepthDarkening", &Config::underwaterDepthDarkening, 0.0f, 2.0f},
 };
 
 const BoolSetting kBoolSettings[] = {
@@ -189,6 +195,7 @@ const BoolSetting kBoolSettings[] = {
 
 const BoolSetting kWaterBoolSettings[] = {
     {"WaterClientSplashes", &Config::waterClientSplashes},
+    {"UnderwaterLook", &Config::underwaterLook},
 };
 
 template <typename Visit>

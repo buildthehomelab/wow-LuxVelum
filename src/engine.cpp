@@ -50,6 +50,7 @@ constexpr uintptr_t kProjectionGlobal = 0x00ADF628;
 constexpr uintptr_t kCameraPosition = 0x00CD8F5C;
 constexpr uintptr_t kCameraTarget = 0x00CD8F68;
 constexpr uintptr_t kCameraInLiquid = 0x00CD8794;
+constexpr uintptr_t kCameraLiquidDepth = 0x00CD8790;
 constexpr uintptr_t kCurrentMap = 0x00AB63BC;
 constexpr uintptr_t kWorldFrame = 0x00B7436C;
 constexpr uintptr_t kWorldFrameFarClip = 0xB14;
@@ -558,6 +559,18 @@ bool ReadToLight(float* toLight)
     return moon;
 }
 
+uintptr_t LiquidTypeRow(uint32_t id);
+
+void ReadCameraLiquid(FrameInputs& out)
+{
+    out.cameraLiquidType = Read<uint32_t>(kCameraInLiquid);
+    out.cameraLiquidDepth = out.cameraLiquidType ? Read<float>(kCameraLiquidDepth) : 0.0f;
+    const uintptr_t row = out.cameraLiquidType ? LiquidTypeRow(out.cameraLiquidType) : 0;
+    out.cameraLiquidSoundBank = row ? Read<uint32_t>(row + kLiquidTypeSoundBank) : 0u;
+    if (!std::isfinite(out.cameraLiquidDepth))
+        out.cameraLiquidDepth = 0.0f;
+}
+
 bool BuildFrameInputsUnsafe(FrameInputs& out, bool withPointLights, const PointLightUpload& upload)
 {
     std::memcpy(out.cameraRelativeView, g_opaque.cameraRelativeView, sizeof(out.cameraRelativeView));
@@ -576,6 +589,7 @@ bool BuildFrameInputsUnsafe(FrameInputs& out, bool withPointLights, const PointL
     out.directColor = Read<uint32_t>(kDirectColor);
     out.ambientColor = Read<uint32_t>(kAmbientColor);
     out.inLiquid = CameraInLiquid();
+    ReadCameraLiquid(out);
     out.mapId = Read<int32_t>(kCurrentMap);
     out.lightParams = ReadLightParamsSelection();
     out.weather = g_weatherLook;

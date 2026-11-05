@@ -21,6 +21,7 @@
 
 void OverrideWaterSeconds(double seconds);
 double WaterClockSeconds();
+bool BuildWaterViewConstants(const FrameInputs& in, const D3DSURFACE_DESC& depthDesc, float (&common)[9][4]);
 void DisableWaveSimulation(bool disabled);
 void ForcePackedWaterDepth(bool forced);
 

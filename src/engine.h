@@ -32,6 +32,9 @@ struct FrameInputs
     float farClip;
     float clientGlowAmount;
     bool inLiquid;
+    uint32_t cameraLiquidType;
+    uint32_t cameraLiquidSoundBank;
+    float cameraLiquidDepth;
     int mapId;
     LightParamsSelection lightParams;
     WeatherLook weather;
