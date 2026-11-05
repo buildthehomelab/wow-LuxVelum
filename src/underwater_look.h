@@ -1,9 +1,10 @@
 #pragma once
 
+#include "water_classify.h"
+
 #include <cstdint>
 
 constexpr uint32_t kLiquidSoundBankWater = 0;
-constexpr uint32_t kLiquidSoundBankOcean = 1;
 constexpr uint32_t kLiquidSoundBankMagma = 2;
 constexpr uint32_t kLiquidSoundBankSlime = 3;
 
