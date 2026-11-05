@@ -414,6 +414,11 @@ double WaterClockSeconds()
     return WaterSeconds();
 }
 
+bool BuildWaterViewConstants(const FrameInputs& in, const D3DSURFACE_DESC& depthDesc, float (&common)[9][4])
+{
+    return BuildCommonConstants(in, depthDesc, common);
+}
+
 void OverrideWaterSeconds(double seconds)
 {
     g_secondsOverride = seconds;

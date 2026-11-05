@@ -111,6 +111,13 @@ struct Config
     float waterFlow = 1.0f;
     bool waterClientSplashes = false;
     int waterDebugView = 0;
+    bool underwaterLook = true;
+    float underwaterClarity = 1.0f;
+    float underwaterCaustics = 0.7f;
+    float underwaterShafts = 0.6f;
+    float underwaterSurface = 1.0f;
+    float underwaterWobble = 0.4f;
+    float underwaterDepthDarkening = 0.35f;
 };
 
 WeatherTuning WeatherTuningFrom(const Config& config);

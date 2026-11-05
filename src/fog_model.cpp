@@ -383,6 +383,11 @@ void UnpackColor(uint32_t argb, float* rgb)
     rgb[2] = static_cast<float>(argb & 0xFF) / 255.0f;
 }
 
+float CameraInteriorWeight(const FrameInputs& in, const Config& cfg)
+{
+    return InteriorWeight(in, cfg);
+}
+
 WeatherLook OutdoorWeatherLook(const FrameInputs& in, const Config& cfg)
 {
     return NeutralWeatherLook(in.weather, 1.0f - InteriorWeight(in, cfg));

@@ -50,13 +50,15 @@ reverse-engineering evidence.
   `log`, `status_log`; water: `water_data` (Forever presets, FFT tiles, foam masks), `water_classify` (liquid
   classes), `water_spectrum` and `water_fft` (GPU FFT waves), `water_contacts` (contact tracker, ring impulses at the
   client's ripple events), `water_ripples` (ripple map simulation), `client_ripple_sprites` (hold on the client's
-  `waterRipples` splash and wake sprites), `water_renderer` (copies, stencil tagging, shading); look: `forever_look`
+  `waterRipples` splash and wake sprites), `water_renderer` (copies, stencil tagging, shading); under water:
+  `underwater_look` (the look from the client's under-water fog and the camera's liquid), `underwater_renderer` (its
+  full-screen pass); look: `forever_look`
   (Forever glow byte before the fog composite, grading decisions at world done and frame end), `grading_renderer`
   (colour grading pass).
 - `shaders/` — the ps_3_0 passes: `vf_*` fog (march, temporal, composite and its multisampled silhouette split, god
   rays and their late composite after an early one, depth probe and depth-copy check),
   `vf_clouds` (storm clouds), `vf_bolt` (lightning bolts), `vw_*` water (FFT, ripple
-  step, depth copy, shading) and `vp_grade` (colour grading).
+  step, depth copy, shading), `vu_underwater` (the view under water) and `vp_grade` (colour grading).
 - `tests/harness.cpp` — the offline D3D9 harness; `--scene harbour` renders a logged in-game frame, `--scene ripples`
   units wading through the basin. `tests/shaders/` holds a copy of the client's M2 fog shader for the transparent fog
   checks.

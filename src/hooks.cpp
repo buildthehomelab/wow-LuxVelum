@@ -8,6 +8,7 @@
 #include "forever_look.h"
 #include "log.h"
 #include "transparent_fog.h"
+#include "underwater_look.h"
 #include "water_classify.h"
 #include "water_renderer.h"
 #include "status_log.h"
@@ -39,6 +40,7 @@ constexpr unsigned kFlatWavesBit = 1u << 31;
 constexpr const char* kCameraUnderLiquid = "camera under liquid";
 constexpr const char* kWorldNotCaptured = "the world render inputs were not captured";
 constexpr const char* kInvalidFrameInputs = "invalid frame inputs";
+constexpr DWORD kUnderwaterStatusLifetimeMs = 1000;
 constexpr DWORD kTransparentFogStatsIntervalMs = 60000;
 constexpr size_t kGlarePassEntryTextSize = 64;
 constexpr double kPercent = 100.0;
@@ -121,6 +123,16 @@ bool g_waterShadedThisFrame = false;
 bool g_waterRipplesAvailable = true;
 unsigned g_waterClassesThisPass = 0;
 WaterFrameStatus g_waterStatus = {false, "waiting for the world to render"};
+
+bool g_underwaterFailed = false;
+bool g_underwaterDrawnThisFrame = false;
+bool g_underwaterDrawnLastFrame = false;
+bool g_underwaterSurfaceCaptured = false;
+bool g_underwaterStatusShown = false;
+DWORD g_underwaterStatusTicks = 0;
+char g_underwaterStatusText[64] = "";
+WaterFrameStatus g_underwaterStatus = {false, ""};
+StatusLog g_underwaterLog;
 StatusLog g_waterLog;
 unsigned g_drawnWaterClassesTextMask = 0;
 char g_drawnWaterClassesText[kDrawnWaterClassesTextSize] = "";
@@ -316,11 +328,25 @@ void LeaveTransparentFogWorld()
     DisarmTransparentFog();
 }
 
+bool UnderwaterLookWanted(const Config& cfg)
+{
+    return cfg.underwaterLook && !cfg.underwater && !g_underwaterFailed && g_worldClient->cameraInLiquid();
+}
+
+bool UnderwaterLookDrawsInPlaceOfStockFog()
+{
+    const Config& cfg = GlobalConfig().Get();
+    return !g_failed && g_underwaterDrawnLastFrame && cfg.stockFog == 1 && UnderwaterLookWanted(cfg) &&
+           g_worldClient->device();
+}
+
 void OnFrameBegin()
 {
     g_renderedThisFrame = false;
+    g_underwaterDrawnThisFrame = false;
+    g_underwaterSurfaceCaptured = false;
     ResetTransparentFogFrame();
-    if (FogDrawsInPlaceOfStockFog())
+    if (FogDrawsInPlaceOfStockFog() || UnderwaterLookDrawsInPlaceOfStockFog())
         PushStockFogOutOfRange();
 }
 
@@ -395,6 +421,7 @@ void OnFrameEnd()
     LeaveTransparentFogWorld();
     RestorePushedStockFog();
     g_renderedLastFrame = g_renderedThisFrame;
+    g_underwaterDrawnLastFrame = g_underwaterDrawnThisFrame;
     LogTransparentFogStatsWhenDue();
 }
 
@@ -580,6 +607,104 @@ bool RenderCurrentWorldFog(FogDevice* device)
     return attempt.tried;
 }
 
+UnderwaterSettings UnderwaterSettingsFrom(const Config& cfg)
+{
+    UnderwaterSettings settings;
+    settings.clarity = cfg.underwaterClarity;
+    settings.caustics = cfg.underwaterCaustics;
+    settings.shafts = cfg.underwaterShafts;
+    settings.surface = cfg.underwaterSurface;
+    settings.wobble = cfg.underwaterWobble;
+    settings.depthDarkening = cfg.underwaterDepthDarkening;
+    return settings;
+}
+
+UnderwaterLookInputs UnderwaterInputsFrom(const FrameInputs& in, const Config& cfg)
+{
+    UnderwaterLookInputs look;
+    look.medium = UnderwaterMediumOf(in.cameraLiquidType, in.cameraLiquidSoundBank);
+    look.cameraDepth = in.cameraLiquidDepth;
+    look.cameraHeight = in.camPos[2];
+    std::memcpy(look.toLight, in.toLight, sizeof(look.toLight));
+    look.lightIsMoon = in.lightIsMoon;
+    UnpackColor(in.fogColor, look.clientFogColour);
+    look.clientFogEnd = in.fogEnd;
+    UnpackColor(in.directColor, look.directLight);
+    look.outdoors = 1.0f - CameraInteriorWeight(in, cfg);
+    return look;
+}
+
+void RecordUnderwaterFrame(bool drawn, UnderwaterMedium medium, const char* skip)
+{
+    g_underwaterStatusShown = true;
+    g_underwaterStatusTicks = GetTickCount();
+    if (drawn)
+    {
+        std::snprintf(g_underwaterStatusText, sizeof(g_underwaterStatusText), "under-water look, %s",
+                      UnderwaterMediumLabel(medium));
+        g_underwaterStatus = {true, g_underwaterStatusText};
+        g_underwaterLog.Drawn();
+        return;
+    }
+    std::snprintf(g_underwaterStatusText, sizeof(g_underwaterStatusText), "under-water look: %s", skip);
+    g_underwaterStatus = {false, g_underwaterStatusText};
+    const StatusLogLine line = g_underwaterLog.Skip(skip);
+    if (line.write)
+        LogWrite(line.level, "under-water look skipped: %s", skip);
+}
+
+void RenderUnderwaterLookUnsafe(FogDevice* device, const Config& cfg)
+{
+    const WorldFogInputs world = ReadWorldFogInputs(cfg);
+    if (!world.valid)
+    {
+        RecordUnderwaterFrame(false, UnderwaterMedium::None, kInvalidFrameInputs);
+        return;
+    }
+    const UnderwaterLook look = BuildUnderwaterLook(UnderwaterInputsFrom(world.in, cfg), UnderwaterSettingsFrom(cfg));
+    const char* skip = "";
+    g_underwaterDrawnThisFrame =
+        RenderUnderwater(device, world.in, look, g_underwaterSurfaceCaptured, WaterClockSeconds(), &skip);
+    RecordUnderwaterFrame(g_underwaterDrawnThisFrame, look.medium, skip && *skip ? skip : "not drawn");
+}
+
+int UnderwaterGuardFilter(unsigned code)
+{
+    VF_LOG_ERROR("exception 0x%08X in the under-water look; it is off for this session, the fog continues", code);
+    return EXCEPTION_EXECUTE_HANDLER;
+}
+
+void RenderUnderwaterLook(FogDevice* device, const Config& cfg)
+{
+    __try
+    {
+        RenderUnderwaterLookUnsafe(device, cfg);
+    }
+    __except (UnderwaterGuardFilter(GetExceptionCode()))
+    {
+        g_underwaterFailed = true;
+        g_underwaterDrawnThisFrame = false;
+    }
+}
+
+bool RenderUnderwaterLookOrFog(FogDevice* device)
+{
+    if (!device || !g_worldClient->worldCaptured())
+        return RenderCurrentWorldFog(device);
+    ReloadConfigAfterInterval();
+    const Config& cfg = GlobalConfig().Get();
+    if (!UnderwaterLookWanted(cfg))
+    {
+        g_underwaterStatusShown = false;
+        if (UnderwaterHoldsCopies(device))
+            ReleaseUnderwater(device);
+        return RenderCurrentWorldFog(device);
+    }
+    RecordFogFrame(false, true, "");
+    RenderUnderwaterLook(device, cfg);
+    return true;
+}
+
 void RenderGodRaysOverTheWorld(FogDevice* device)
 {
     const char* skip = "";
@@ -761,7 +886,7 @@ void DrawFogBeforeWorldText()
     if (g_failed || !g_transparentFog.inWorld || g_transparentFog.composited || g_transparentFog.drawnBeforeWorldText)
         return;
     ForeverLookBeforeEarlyFog();
-    g_transparentFog.drawnBeforeWorldText = RenderCurrentWorldFog(g_worldClient->device());
+    g_transparentFog.drawnBeforeWorldText = RenderUnderwaterLookOrFog(g_worldClient->device());
 }
 
 void OnWorldDone()
@@ -769,7 +894,7 @@ void OnWorldDone()
     if (!g_failed && g_transparentFog.composited)
         RenderGodRaysOverTheWorld(g_worldClient->device());
     else if (!g_failed && !g_transparentFog.drawnBeforeWorldText)
-        RenderCurrentWorldFog(g_worldClient->device());
+        RenderUnderwaterLookOrFog(g_worldClient->device());
     DisarmTransparentFog();
     g_worldClient->endWorld();
 }
@@ -838,6 +963,14 @@ enum class WaterArming
     Failed,
 };
 
+void CaptureSceneUnderSurface(FogDevice* device, const FrameInputs& in, const Config& cfg)
+{
+    if (g_failed || !cfg.underwaterLook || cfg.underwater || g_underwaterFailed || cfg.underwaterSurface <= 0.0f ||
+        UnderwaterMediumOf(in.cameraLiquidType, in.cameraLiquidSoundBank) != UnderwaterMedium::Water)
+        return;
+    g_underwaterSurfaceCaptured = CaptureUnderwaterSurface(device, in.viewport);
+}
+
 WaterArming ArmWaterPass(FogDevice* device, const Config& cfg, const char** reason)
 {
     FrameInputs in = {};
@@ -848,6 +981,7 @@ WaterArming ArmWaterPass(FogDevice* device, const Config& cfg, const char** reas
     }
     if (in.inLiquid)
     {
+        CaptureSceneUnderSurface(device, in, cfg);
         *reason = "camera under water";
         return WaterArming::Idle;
     }
@@ -1808,6 +1942,8 @@ WaterFrameStatus LastWaterFrameStatus()
         return {false, "hooks not installed"};
     if (g_waterFailed)
         return {false, "stopped after an exception, see LuxVelum.log"};
+    if (g_underwaterStatusShown && GetTickCount() - g_underwaterStatusTicks < kUnderwaterStatusLifetimeMs)
+        return g_underwaterStatus;
     if (!GlobalConfig().Get().water)
         return {false, "off"};
     return g_waterStatus;

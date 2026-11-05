@@ -72,9 +72,13 @@ This fork ([Raz0r1337/coa-vfog](https://github.com/Raz0r1337/coa-vfog), developm
 - **Modern water** on lakes, rivers, the sea and indoor pools: FFT waves from Forever's wave tiles, refraction,
   depth absorption and in-scattering, foam on wave crests, along shores and in shallow water, a sun or moon glint,
   and reflections of the scene with the sky as a fallback. The zone's own water colours can tint it
-  (`WaterZoneColors`). Magma, slime, custom non-water liquids and water seen from below keep the client's look.
+  (`WaterZoneColors`). Magma, slime and custom non-water liquids keep the client's look.
   Players, creatures, pets and mounts that wade or swim drag a V-shaped wake and stir the water as they start and
   stop (`WaterRipples`), in place of the client's flat splash and wake sprites (`WaterClientSplashes`).
+- **Under water** (`UnderwaterLook`): with the camera in water, distant things fade into the zone's own
+  under-water colour, red light first; the surface overhead shows the world above through a clear circle (Snell's
+  window) and mirrors the water around it; sunlight ripples over the ground and shines down in shafts; the view
+  waves gently. Magma and slime get a thick fog of the client's colour and no sunlight.
 - **Multisampling**: the game's Multisampling option is kept where the DLL can copy the multisampled depth
   (`Multisampling`); fog and water edges are resolved per sample.
 - **Opt-in** (all off by default): Forever's per-light glow amount (`ForeverGlow`) and colour curve (`ColorGrading`)
@@ -189,6 +193,28 @@ ring, and wading in splashes once. The shading adds Forever's one-map slope (pre
 the elapsed fraction of the next step. With `WaterClientSplashes=0`, while ripples can run on shaded water, the DLL
 holds the client's `waterRipples` value at 0, so its `splash.blp` and `wake.blp` sprites stop, and puts the value
 back when the hold ends.
+
+**Under water.** While `[0xCD8794]` holds a liquid type and `UnderwaterLook=1` (and `Underwater=0`), one
+full-screen pass replaces the fog at the place the fog would draw (before world text, or after the world). Its
+inputs are the client's own under-water fog (colour `0xD38BA0`, end distance of group 1, read before the DLL pushes
+the stock fog out of range), the camera's depth below the surface `[0xCD8790]` and the liquid type's sound bank,
+which picks water (0, 1), magma (2) or slime (3). From a frame after one the pass drew, the stock fog is pushed out of
+range under water too, so the client's flat fog does not stack under it; a failed pass leaves the next frame to the
+client. The fog's distance is the client's end distance times `UnderwaterClarity`, 5% left there, with each channel's
+extinction scaled between 0.7× and 1.6× by how far it falls below the brightest channel of the client's colour, so
+red fades first in blue water and the zone's tint carries farthest. Geometry below the camera's depth darkens by the
+same extinction over the extra depth times `UnderwaterDepthDarkening`. The surface is the plane at camera height +
+depth; where the view ray crosses it before the scene it shows a copy of the scene taken when the client starts its
+liquid pass (before the surface is drawn) through four moving sine waves' normal, weighted by the Fresnel
+transmission from below (total reflection outside the 48.6° window shows the scatter colour). Caustics are two
+animated Voronoi edge layers at the point where the refracted sun ray through the ground point meets the surface,
+faded by the light's path down, the distance and the surface's facing; shafts march ten steps of a coarser layer
+along the view ray within 70 yd. Sunlight is off below the horizon and indoors; moonlight is a fifth; magma's
+fog colour is brightened as a glow. The copy before the surface is taken in the water pass's under-water branch, so
+it needs `Water=1` and water queued in view; without it the surface shows the current scene, with the client's own
+surface in it. Limits: a sloping river's surface is taken as flat at the camera's height; lava and slime show no
+surface; effects drawn after the liquid pass (spells, particles, see-through models) don't show where the view
+crosses the surface; `StockFog=0` keeps the client's flat fog under the pass.
 
 **Antialiasing.** D3D9 textures cannot be multisampled, so with the game's Multisampling option the depth the
 passes read is a copy. `CheckDeviceMultiSampleType` offers the game's sample counts only while `Multisampling=1`
@@ -485,7 +511,7 @@ Gx is the graphics device `[0xC5DF88]`.
 | Zone fog distance (light float band 0) | `0xD38C1C` |
 | Light colours: ambient, direct, sun | `0xD38BD4`, `0xD38BD8`, `0xD38BF8` |
 | Visible sun / moon sprite, sky centre | `0xD38E28`, `0xD38E48`, `0xD38B18` (day window `[0xA41CA4, 0xA41CA0]`) |
-| Camera in liquid | `0xCD8794` |
+| Camera's liquid type (0 = none), depth of the surface above the camera | `0xCD8794`, `0xCD8790` |
 | Client's storm weight (0..1), always 0 in this build | `0xD38B88` |
 | Weather object; its latest intensity and type (0 none or fog, 1 rain, 2 snow, 3 sand) | `[0xCD7544]`, `+0x00`, `+0x20` |
 | Light swaps: count, entries; each one's replaced row, row copy and fade | `0xD39018`, `[0xD3901C]`, `+0x00`, `+0x04`, `+0x08` |
@@ -675,6 +701,12 @@ Engine notes behind the code:
   logged once. The interior inputs are read after the walk whatever it returned and kept when their reads were
   consistent; a read fault leaves them exterior. An unsupported client or an out-of-range camera gives an empty
   result. `LocalLights=0` skips the point-light walk.
+- Camera liquid. `0x790920` asks the liquid query `0x7A0B00` at the camera `0xCD8F5C` for the type (`[ebp−4]`)
+  and the surface height (`[ebp−8]`), stores `level − camera z` at `0x7909C2` (`D9 1D 90 87 CD 00`, after `0x7909BC
+  D8 25 64 8F CD 00`, or `level − [ebp−0x10]` for the WMO-local query `0x7C8360`) and the type at `0x790A58`
+  (`A3 94 87 CD 00`); it reads the LiquidType row through `0xAD4074`/`0xAD4070`/`0xAD4084` (`0x7909F3`–`0x790A0E`).
+  `0x780620` (`8B 45 08 85 C0 74 08 D9 05 90 87 CD 00 D9 18 A1 94 87 CD 00`) returns both; its callers include the
+  DayNight fog update `0x7F16F0` (`0x7F17CE`), which picks the liquid fog into the stock fog groups.
 - Water pass. `0x77F020` jumps to `0x790A80`, which calls the liquid renderer `0x8A2240` at `0x790AA2`
   (`E8 99 17 11 00`) with ECX = `[0xCD8610]` (`0x790A91`), the camera `0xCD8F5C` and pass 1 (`0x790A9B`, `6A 01`);
   it is a thiscall that returns with `ret 8` (`0x8A2376`). The same `0x77F020` runs from `0x4F9170` (camera above
@@ -941,7 +973,7 @@ its comments describe every key. In the game, `Ctrl+F7` opens the same settings 
 | `FarClipMax` | 1583 | Continent view distance up to 1583 yd, within `farclip`; 0 keeps Ascension's 791 cap |
 | `MaxDistance` | 5000 | Fog range: sky integration length and the Classic distance-curve scale |
 | `Temporal` | 0.85 | History weight, 0 = off |
-| `Underwater` | 0 | Keep the effect under water |
+| `Underwater` | 0 | Keep the volumetric fog under water; 1 also turns `UnderwaterLook` off |
 | `LiquidDepth` | 1 | Water surfaces write depth so fog uses their distance (always while modern water is drawn) |
 | `Multisampling` | 1 | Keep the game's Multisampling when its depth can be copied; 0 = multisampling off (see below) |
 | `DebugView` | 0 | 1 radiance, 2 transmittance, 3 linear depth |
@@ -959,6 +991,11 @@ its comments describe every key. In the game, `Ctrl+F7` opens the same settings 
 | `WaterRipples` | 0.5 | Wakes of units in the water 0..2; 0 = no unit reads and no ripple simulation |
 | `WaterClientSplashes` | 0 | 1 keeps the client's splash and wake sprites; 0 hides them for all units while wakes run |
 | `WaterDebugView` | 0 | 1 wave normals, 2 foam, 3 transmittance, 4 reflection, 5 liquid class, 6 ripple height, 7 flow |
+| `UnderwaterLook` | 1 | The view through water, magma or slime with the camera in it; 0 = the client's flat colour |
+| `UnderwaterClarity` | 1 | Under-water view distance as a multiple of the client's, 0.25..4 |
+| `UnderwaterCaustics`, `UnderwaterShafts` | 0.7, 0.6 | Rippling sunlight and light shafts, 0..2 |
+| `UnderwaterSurface` | 1 | The surface seen from below, 0..1 |
+| `UnderwaterWobble`, `UnderwaterDepthDarkening` | 0.4, 0.35 | View waving and darkening with depth, 0..2 |
 
 Turning `FarClipMax` on from 0 needs a restart; other changes, including 0, apply at the next `farclip` change,
 map load or zone change, where raising it shows a loading screen.
@@ -1016,7 +1053,9 @@ Forever in the game, so by default colours still differ from Classic.
   fog up to the 3.3.5 far clip, which is far shorter than the modern client's.
 - `FarClipMax` raises memory use (about four times the loaded terrain in a 32-bit process); Ascension's reason
   for the continent cap is unknown. Without the key in the INI it stays off.
-- Modern water: water seen from below keeps the client's look; flat water has no flow direction (the client has no
+- Under water: the surface is a flat plane at the camera's surface height, so on a sloping river it sits too high
+  downstream and too low upstream; the waves seen from below are their own, not the FFT's.
+- Modern water: flat water has no flow direction (the client has no
   flow maps), so only sloped water flows and Forever's river foam is omitted; the surface's own height doesn't change
   with the waves, only its shading moves; reflections are
   screen-space, so what is off screen falls back to the sky colours; interiors are detected by liquid type only.

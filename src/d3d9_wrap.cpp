@@ -152,6 +152,14 @@ public:
     bool Grade(const D3DVIEWPORT9& world, const float* curve, float strength, const char** skip);
     void ReleaseGrading() { m_grading.ReleaseDefaultPool(); }
     GradingStats Grading() const { return m_grading.Stats(); }
+    bool CaptureUnderwaterSurface(const D3DVIEWPORT9& world)
+    {
+        return FogActive() && m_underwater.CaptureSceneBeforeSurface(m_real, world);
+    }
+    bool RenderUnderwater(const FrameInputs& in, const UnderwaterLook& look, bool useSceneBeforeSurface,
+                          double seconds, const char** skip);
+    void ReleaseUnderwater() { m_underwater.ReleaseDefaultPool(); }
+    const UnderwaterRenderer& Underwater() const { return m_underwater; }
 
     HRESULT STDMETHODCALLTYPE QueryInterface(REFIID riid, void** out) override;
     ULONG STDMETHODCALLTYPE AddRef() override;
@@ -574,6 +582,7 @@ private:
     Renderer m_renderer;
     WaterRenderer m_water;
     GradingRenderer m_grading;
+    UnderwaterRenderer m_underwater;
 };
 
 namespace
@@ -926,6 +935,7 @@ FogDevice::~FogDevice()
     Unregister(this);
     AbortWater();
     m_grading.ReleaseAll();
+    m_underwater.ReleaseAll();
     m_water.ReleaseAll();
     m_renderer.ReleaseAll();
     ReleaseDepth();
@@ -1076,6 +1086,7 @@ HRESULT FogDevice::Reset(D3DPRESENT_PARAMETERS* pp)
     AbortWater();
     m_water.ReleaseDefaultPool();
     m_grading.ReleaseDefaultPool();
+    m_underwater.ReleaseDefaultPool();
     if (!m_fog)
         return m_real->Reset(pp);
 
@@ -1185,6 +1196,15 @@ bool FogDevice::Grade(const D3DVIEWPORT9& world, const float* curve, float stren
     if (skip)
         *skip = graded ? "" : m_grading.LastSkipReason();
     return graded;
+}
+
+bool FogDevice::RenderUnderwater(const FrameInputs& in, const UnderwaterLook& look, bool useSceneBeforeSurface,
+                                 double seconds, const char** skip)
+{
+    const bool drawn = FogActive() && m_underwater.Render(m_real, Depth(), in, look, useSceneBeforeSurface, seconds);
+    if (skip)
+        *skip = drawn ? "" : (FogActive() ? m_underwater.LastSkipReason() : "fog inactive");
+    return drawn;
 }
 
 void SetRealDirect3DCreate9(Direct3DCreate9Fn fn)
@@ -1405,6 +1425,32 @@ void ReleaseGrading(FogDevice* device)
 {
     if (device)
         device->ReleaseGrading();
+}
+
+bool CaptureUnderwaterSurface(FogDevice* device, const D3DVIEWPORT9& world)
+{
+    return device && device->CaptureUnderwaterSurface(world);
+}
+
+bool RenderUnderwater(FogDevice* device, const FrameInputs& in, const UnderwaterLook& look, bool useSceneBeforeSurface,
+                      double seconds, const char** skipReason)
+{
+    if (device)
+        return device->RenderUnderwater(in, look, useSceneBeforeSurface, seconds, skipReason);
+    if (skipReason)
+        *skipReason = "no fog device";
+    return false;
+}
+
+void ReleaseUnderwater(FogDevice* device)
+{
+    if (device)
+        device->ReleaseUnderwater();
+}
+
+bool UnderwaterHoldsCopies(FogDevice* device)
+{
+    return device && device->Underwater().HoldsCopies();
 }
 
 GradingStats GradingStatsOf(FogDevice* device)

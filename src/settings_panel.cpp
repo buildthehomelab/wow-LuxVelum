@@ -458,6 +458,29 @@ bool DrawWater(Config& c)
     return changed;
 }
 
+bool DrawUnderwater(Config& c)
+{
+    const Section section("Under water");
+    if (!section)
+        return false;
+    bool changed = Toggle("Under-water look", c.underwaterLook,
+                          "While the camera is in water, magma or slime, draw the view as seen through it. Off: the "
+                          "client's own flat colour");
+    changed |= Slider("Clarity", c.underwaterClarity, 0.25f, 4.0f, "%.2f",
+                      "How far you see under water, as a multiple of the client's own distance",
+                      ImGuiSliderFlags_Logarithmic);
+    changed |= Slider("Rippling light", c.underwaterCaustics, 0.0f, 2.0f, "%.2f",
+                      "Sunlight rippling over the ground and models, 0 = none");
+    changed |= Slider("Light shafts", c.underwaterShafts, 0.0f, 2.0f, "%.2f",
+                      "Sunlight shining down from the surface, 0 = none");
+    changed |= Slider("Surface", c.underwaterSurface, 0.0f, 1.0f, "%.2f",
+                      "The surface from below: the world above through a clear circle, a mirror around it");
+    changed |= Slider("Wobble", c.underwaterWobble, 0.0f, 2.0f, "%.2f", "Gentle waving of the view, 0 = still");
+    changed |= Slider("Depth darkening", c.underwaterDepthDarkening, 0.0f, 2.0f, "%.2f",
+                      "How much darker the ground gets the deeper it lies below you, 0 = none");
+    return changed;
+}
+
 bool DrawDebug(Config& c)
 {
     const Section section("Debug");
@@ -510,6 +533,7 @@ bool SettingsPanel::DrawSettings(Config& edited, const FogFrameStatus& fogStatus
     changed |= DrawWorld(edited);
     changed |= DrawAntialiasing(edited);
     changed |= DrawWater(edited);
+    changed |= DrawUnderwater(edited);
     changed |= DrawDebug(edited);
     ImGui::PopItemWidth();
     ImGui::EndChild();

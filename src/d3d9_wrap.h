@@ -3,6 +3,7 @@
 #include "config.h"
 #include "engine.h"
 #include "grading_renderer.h"
+#include "underwater_renderer.h"
 #include "msaa_depth.h"
 #include "transparent_fog.h"
 #include "water_types.h"
@@ -67,3 +68,8 @@ bool GradeWorld(FogDevice* device, const D3DVIEWPORT9& world, const float* curve
                 const char** skipReason);
 void ReleaseGrading(FogDevice* device);
 GradingStats GradingStatsOf(FogDevice* device);
+bool CaptureUnderwaterSurface(FogDevice* device, const D3DVIEWPORT9& world);
+bool RenderUnderwater(FogDevice* device, const FrameInputs& in, const UnderwaterLook& look, bool useSceneBeforeSurface,
+                      double seconds, const char** skipReason);
+void ReleaseUnderwater(FogDevice* device);
+bool UnderwaterHoldsCopies(FogDevice* device);
