@@ -261,9 +261,14 @@ being taken away keeps its slot until its fade ends. So the clouds are a pass of
 overcast into a cover, and `vf_clouds` keeps the part of an evenly spread noise field above `1 - cover`, so a share of
 the sky is that share of the field and the clouds' edges move outward as the weight rises. From a cover of 0.8 the
 threshold is pulled lower still, by up to 0.2, because billows would otherwise leave gaps in a full storm. The deck has
-depth: thick cloud hangs lower, and a short march (eight steps, five at `Quality=1`) along each view ray finds the
-surface it meets first, so billows overlap and catch light on their sides. Round billow noise shapes that surface, its
-slope lights it from the sun and from a strike, and two coarser mips darken the hollows and the heaviest masses. The
+depth: each cloud swells both ways from a middle height, up and down, so neither side is flat, and thick cloud reaches
+furthest. Above a cover of 0.55 that middle rises from 0.4 to 0.8 of the deck (`CloudShape::middle`), so a closing deck
+hangs lower and its underside shows the most relief; its tops are out of sight by then. A short march along each view
+ray (eight steps, five at `Quality=1`, so nine or six samples, plus one at the middle, where thin cloud is) finds the
+surface it meets first, so billows overlap and catch light on their sides. It reads the field at a mip as wide as a
+step, so steps don't show as stacked outlines. Round billow noise shapes that surface, its slope lights it from the sun
+and from a strike, and two coarser mips darken the hollows and the heaviest masses. Side light takes over gradually up
+the cloud, to at most 70%, so higher surfaces and thin cloud read lighter than a thick underside. The
 field is one tiling 512 x 512 texture, made when the DLL loads and uploaded at first use, with its body in red, finer
 detail in green and a slow warp in blue and alpha.
 

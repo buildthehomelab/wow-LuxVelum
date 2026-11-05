@@ -22,10 +22,11 @@ static const float kBillowAmount = 0.55;
 static const float kFineRepeats = 4.8;
 static const float kFineAmount = 0.19;
 static const float kBillowMean = BILLOW_MEAN;
-static const float kDeckDepth = 0.2;
-static const float kShallowDepthShare = 0.25;
+static const float kDeckDepth = 0.3;
+static const float kShallowDepthShare = 0.5;
 static const float kShallowRayEnd = 0.3;
 static const float kShallowRayStart = 0.02;
+static const float kRoundingKnee = 0.35;
 static const float kEdgeBelow = -0.05;
 static const float kEdgeAbove = 0.08;
 static const float kNormalReach = 0.006;
@@ -33,6 +34,13 @@ static const float kNormalSteepness = 0.012;
 static const float kSunFromBelowShare = 0.35;
 static const float kWrappedLight = 0.5;
 static const float kThickShadow = 0.6;
+static const float kSideLightFromMiddle = -0.4;
+static const float kFullSideLightFromMiddle = 0.45;
+static const float kMostSideLight = 0.7;
+static const float kSideLight = 0.78;
+static const float kSideSunGain = 0.9;
+static const float kSideBulgeFloor = 0.72;
+static const float kSideBulgeGain = 0.5;
 static const float kBulgeContrast = 2.4;
 static const float kBulgeFloor = 0.5;
 static const float kBulgeGain = 0.75;
@@ -67,6 +75,26 @@ float MarchDensity(float2 place, float2 dx, float2 dy)
     return (body + (billow - kBillowMean) * kBillowAmount - cCloudShape.x) / cCloudShape.y;
 }
 
+float MarchDensityAtLod(float2 place, float lod)
+{
+    float body = tex2Dlod(sCloudField, float4(place, 0, lod)).r;
+    float2 billowPlace = place * kBillowRepeats;
+    float billow = tex2Dlod(sCloudField, float4(billowPlace, 0, lod + log2(kBillowRepeats))).g;
+    return (body + (billow - kBillowMean) * kBillowAmount - cCloudShape.x) / cCloudShape.y;
+}
+
+float ShareFromMiddle(float share)
+{
+    float middle = cCloudShape.z;
+    return share > middle ? (share - middle) / (1 - middle) : (middle - share) / middle;
+}
+
+float OverColumn(float density, float share)
+{
+    float rounded = density > 0 ? density / (max(density, 0) + kRoundingKnee) : density;
+    return rounded - ShareFromMiddle(share);
+}
+
 float4 main(float2 pixel : VPOS) : COLOR0
 {
     float3 ray = normalize(ViewToWorldDirection(ViewRayAtUnitDepth(pixel + 0.5)));
@@ -84,24 +112,38 @@ float4 main(float2 pixel : VPOS) : COLOR0
     float depthShare = lerp(kShallowDepthShare, 1, smoothstep(kShallowRayStart, kShallowRayEnd, ray.z));
     float2 climb = plane * kDeckDepth * depthShare;
 
+    float marchLod = max(lod, log2(max(length(climb) / STEPS * kFieldSize, 0.000001)));
+
     float best = -9;
+    float bestShare = 1;
     float hitShare = 1;
     float hit = 0;
     float overBefore = -1;
-    float shareBefore = 0;
-    for (int step = 1; step <= STEPS; ++step)
+    for (int step = 0; step <= STEPS; ++step)
     {
         float share = float(step) / STEPS;
-        float over = MarchDensity(base + climb * share, dx, dy) + share - 1;
+        float over = OverColumn(MarchDensityAtLod(base + climb * share, marchLod), share);
         if (hit == 0 && over >= 0)
         {
-            hitShare = shareBefore + (share - shareBefore) * saturate(-overBefore / max(over - overBefore, 0.0001));
+            float crossing = saturate(-overBefore / max(over - overBefore, 0.0001));
+            hitShare = max(share - (1 - crossing) / STEPS, 0);
             hit = 1;
         }
-        best = max(best, over);
+        if (over > best)
+        {
+            best = over;
+            bestShare = share;
+        }
         overBefore = over;
-        shareBefore = share;
     }
+    float overAtMiddle = OverColumn(MarchDensityAtLod(base + climb * cCloudShape.z, marchLod), cCloudShape.z);
+    if (overAtMiddle > best)
+    {
+        best = overAtMiddle;
+        bestShare = cCloudShape.z;
+    }
+    if (hit == 0)
+        hitShare = bestShare;
 
     float2 surface = base + climb * hitShare;
     float atSurface = MarchDensity(surface, dx, dy);
@@ -120,8 +162,13 @@ float4 main(float2 pixel : VPOS) : COLOR0
     float mass = tex2Dlod(sCloudField, float4(surface, 0, coarseLod + kMassMips)).r;
     float bulge = saturate((body - hollow) * kBulgeContrast + 0.5);
     float masses = saturate((mass - 0.5) * kMassContrast + 0.5);
-    float light = saturate(sunlit * (1 - kThickShadow * thick) * (kBulgeFloor + kBulgeGain * bulge) *
-                           (kMassLight - kMassShadow * masses));
+    float underLight = saturate(sunlit * (1 - kThickShadow * thick) * (kBulgeFloor + kBulgeGain * bulge) *
+                                (kMassLight - kMassShadow * masses));
+    float sideLight = saturate(kSideLight + dot(normal.xy, cCloudToSun.xy) * kSideSunGain) *
+                      (kSideBulgeFloor + kSideBulgeGain * bulge);
+    float upperSide =
+        kMostSideLight * smoothstep(kSideLightFromMiddle, kFullSideLightFromMiddle, hitShare - cCloudShape.z);
+    float light = saturate(lerp(underLight, sideLight, upperSide));
     float3 colour = lerp(cCloudDark.rgb, cCloudLit.rgb, light);
 
     float sunGlow = pow(saturate(dot(ray, cCloudToSun.xyz)), kSunGlowPower);

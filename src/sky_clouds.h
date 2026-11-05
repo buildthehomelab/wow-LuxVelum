@@ -44,6 +44,7 @@ struct CloudShape
     float cover = 0.0f;
     float threshold = 1.0f;
     float thickRange = 0.0f;
+    float middle = 0.0f;
     float opacity = 0.0f;
 };
 

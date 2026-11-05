@@ -1148,7 +1148,7 @@ void Renderer::DrawSkyClouds(IDirect3DDevice9* dev, const SceneDepth& depth, con
     UpdateBolt(in, viewToWorld);
     const float boltGlow = m_bolt.visible && cfg.weatherBolts > 0.0f ? 1.0f : 0.0f;
     const Float4 constants[9] = {
-        {shape.threshold, shape.thickRange, 0.0f, 0.0f},
+        {shape.threshold, shape.thickRange, shape.middle, 0.0f},
         {static_cast<float>(m_cloudDrift.windU), static_cast<float>(m_cloudDrift.windV),
          static_cast<float>(m_cloudDrift.warpU), static_cast<float>(m_cloudDrift.warpV)},
         {static_cast<float>(std::fmod(in.camPos[0] / yardsPerTile, kCloudWindWrap)),
