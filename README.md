@@ -296,7 +296,12 @@ step, so steps don't show as stacked outlines. Round billow noise shapes that su
 and from a strike, and two coarser mips darken the hollows and the heaviest masses. Side light takes over gradually up
 the cloud, to at most 70%, so higher surfaces and thin cloud read lighter than a thick underside. The
 field is one tiling 512 x 512 texture, made when the DLL loads and uploaded at first use, with its body in red, finer
-detail in green and a slow warp in blue and alpha.
+detail in green and a slow warp in blue and alpha. The body is many round puffs, one per cell of a 14 x 14 grid and
+smaller ones on a 28 x 28 grid, each with its own size and height, joined by a soft maximum. Slow noise lifts the puffs
+in a few places, so the first clouds come up in groups. A scattered sky is many separate clouds, and as the cover rises
+they grow into each other, but the field still dips where two puffs meet, so a closing sky keeps their outlines and
+their separate bellies instead of turning into one mass. Puffs more than two radii away count as nothing, which keeps
+the build to about half a second.
 
 The pass runs straight after the client's sky pass, from a hook on its one call site: `0x79ACBC E8` to `0x7F09B0`, a
 cdecl call the client skips when `[0xADF580]` is not above 0 (`0x79AC3F`) or `[0xCD8794]` says the camera is in liquid.
