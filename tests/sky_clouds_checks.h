@@ -5,6 +5,7 @@
 #include <algorithm>
 #include <cmath>
 #include <cstdio>
+#include <vector>
 
 namespace sky_clouds_checks
 {
@@ -16,6 +17,10 @@ constexpr uint32_t kWeightRow045 = 8909;
 constexpr uint32_t kWeightRow080 = 8916;
 constexpr uint32_t kNightLevelCopy = 2 * kLightCopyStep;
 constexpr uint32_t kCheckedFieldSize = 64;
+constexpr float kScatteredCover = 0.3f;
+constexpr int kSmallestCountedCloud = 4;
+constexpr int kFewestScatteredClouds = 30;
+constexpr float kLargestCloudShare = 0.5f;
 constexpr uint32_t kNightLevelFour = 9004;
 constexpr uint32_t kLevelFourBaseLight = 30001;
 
@@ -228,6 +233,59 @@ void CheckField()
     Check(ShrinkCloudField(square, 2) == std::vector<uint32_t>{0x20304050u}, "a mip averages each channel on its own");
 }
 
+std::vector<int> CloudSizesAbove(const std::vector<uint32_t>& field, uint32_t size, uint32_t threshold)
+{
+    std::vector<bool> seen(field.size(), false);
+    std::vector<int> sizes;
+    for (size_t start = 0; start < field.size(); ++start)
+    {
+        if (seen[start] || RedOf(field[start]) < threshold)
+            continue;
+        int cloud = 0;
+        std::vector<size_t> open = {start};
+        seen[start] = true;
+        while (!open.empty())
+        {
+            const size_t at = open.back();
+            open.pop_back();
+            ++cloud;
+            const uint32_t x = static_cast<uint32_t>(at % size);
+            const uint32_t y = static_cast<uint32_t>(at / size);
+            const size_t neighbours[4] = {static_cast<size_t>(y) * size + (x + 1) % size,
+                                          static_cast<size_t>(y) * size + (x + size - 1) % size,
+                                          static_cast<size_t>((y + 1) % size) * size + x,
+                                          static_cast<size_t>((y + size - 1) % size) * size + x};
+            for (size_t next : neighbours)
+                if (!seen[next] && RedOf(field[next]) >= threshold)
+                {
+                    seen[next] = true;
+                    open.push_back(next);
+                }
+        }
+        sizes.push_back(cloud);
+    }
+    return sizes;
+}
+
+void CheckScatteredClouds()
+{
+    const std::vector<uint32_t> field = BuildCloudField(kCheckedFieldSize);
+    const uint32_t threshold = static_cast<uint32_t>(std::lround((1.0f - kScatteredCover) * 255.0f));
+    const std::vector<int> sizes = CloudSizesAbove(field, kCheckedFieldSize, threshold);
+    int counted = 0;
+    int covered = 0;
+    int largest = 0;
+    for (int cloud : sizes)
+    {
+        counted += cloud >= kSmallestCountedCloud ? 1 : 0;
+        covered += cloud;
+        largest = std::max(largest, cloud);
+    }
+    Check(counted >= kFewestScatteredClouds, "a sky under a third covered is many separate clouds");
+    Check(covered > 0 && static_cast<float>(largest) < kLargestCloudShare * static_cast<float>(covered),
+          "no one cloud takes most of a scattered sky");
+}
+
 void CheckDriftWraps()
 {
     CloudDrift drift;
@@ -273,6 +331,7 @@ void Run()
     CheckCover();
     CheckColours();
     CheckField();
+    CheckScatteredClouds();
     CheckDriftWraps();
     CheckWind();
 }

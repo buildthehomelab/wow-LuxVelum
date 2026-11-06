@@ -39,16 +39,27 @@ constexpr double kSecondsPerWarpTile = 2700.0;
 constexpr double kWarpCrosswind = 0.6;
 constexpr double kWindBearingRadians = 20.0 * 3.14159265358979323846 / 180.0;
 
-constexpr uint32_t kBodyCells = 4;
+struct PuffTier
+{
+    uint32_t cells;
+    uint32_t seed;
+    float smallestRadius;
+    float largestRadius;
+    float lowestHeight;
+    float highestHeight;
+};
+
+constexpr PuffTier kPuffTiers[] = {{14, 1000, 0.5f, 1.0f, 0.65f, 1.0f}, {28, 2000, 0.5f, 0.85f, 0.45f, 0.75f}};
+constexpr int kPuffReach = 2;
+constexpr float kPuffJoinSharpness = 24.0f;
+constexpr float kPuffFadedSpread = 4.0f;
+constexpr uint32_t kGatherCells = 3;
+constexpr float kGatherPull = 0.55f;
 constexpr uint32_t kFineCells = 32;
-constexpr uint32_t kClusterCells = 2;
+constexpr float kFineShare = 0.04f;
 constexpr uint32_t kWarpCells = 4;
 constexpr uint32_t kDetailCells = 8;
-constexpr float kBodyShare = 0.78f;
-constexpr float kFineShare = 0.22f;
-constexpr float kClusterShare = 0.30f;
-constexpr float kWarpReach = 0.12f;
-constexpr float kBodyGain = 0.6f;
+constexpr float kWarpReach = 0.06f;
 constexpr float kFineGain = 0.55f;
 constexpr float kBillowGain = 0.5f;
 constexpr int kBillowLayers = 4;
@@ -119,11 +130,64 @@ float Wrapped(float u)
     return u - std::floor(u);
 }
 
-float BodyAt(float u, float v)
+struct Puff
 {
-    return kBodyShare * LayeredNoise(u, v, kBodyCells, 3, kBodyGain, 100) +
-           kFineShare * LayeredNoise(u, v, kFineCells, 4, kFineGain, 200) +
-           kClusterShare * (LayeredNoise(u, v, kClusterCells, 2, kCommonGain, 300) - 0.5f);
+    float x;
+    float y;
+    float radius;
+    float height;
+};
+
+std::vector<Puff> PuffsOf(const PuffTier& tier)
+{
+    std::vector<Puff> puffs(static_cast<size_t>(tier.cells) * tier.cells);
+    for (uint32_t cy = 0; cy < tier.cells; ++cy)
+        for (uint32_t cx = 0; cx < tier.cells; ++cx)
+        {
+            Puff& puff = puffs[static_cast<size_t>(cy) * tier.cells + cx];
+            puff.x = 0.1f + 0.8f * LatticeValue(cx, cy, tier.seed);
+            puff.y = 0.1f + 0.8f * LatticeValue(cx, cy, tier.seed + 1);
+            puff.radius = Mix(tier.smallestRadius, tier.largestRadius, LatticeValue(cx, cy, tier.seed + 2));
+            const float gather =
+                LayeredNoise((static_cast<float>(cx) + puff.x) / static_cast<float>(tier.cells),
+                             (static_cast<float>(cy) + puff.y) / static_cast<float>(tier.cells), kGatherCells, 2,
+                             kCommonGain, 300);
+            puff.height = Mix(tier.lowestHeight, tier.highestHeight, LatticeValue(cx, cy, tier.seed + 3)) *
+                          (1.0f - kGatherPull + kGatherPull * gather);
+        }
+    return puffs;
+}
+
+float PuffSum(float u, float v, const PuffTier& tier, const std::vector<Puff>& puffs)
+{
+    const float x = u * static_cast<float>(tier.cells);
+    const float y = v * static_cast<float>(tier.cells);
+    const int fx = static_cast<int>(std::floor(x));
+    const int fy = static_cast<int>(std::floor(y));
+    const int cells = static_cast<int>(tier.cells);
+    float sum = 0.0f;
+    for (int oy = -kPuffReach; oy <= kPuffReach; ++oy)
+        for (int ox = -kPuffReach; ox <= kPuffReach; ++ox)
+        {
+            const int cx = fx + ox;
+            const int cy = fy + oy;
+            const Puff& puff = puffs[static_cast<size_t>(((cy % cells) + cells) % cells) * tier.cells +
+                                     static_cast<size_t>(((cx % cells) + cells) % cells)];
+            const float dx = x - (static_cast<float>(cx) + puff.x);
+            const float dy = y - (static_cast<float>(cy) + puff.y);
+            const float spread = (dx * dx + dy * dy) / (puff.radius * puff.radius);
+            sum += spread > kPuffFadedSpread ? 1.0f : std::exp(kPuffJoinSharpness * puff.height * std::exp(-spread));
+        }
+    return sum;
+}
+
+float BodyAt(float u, float v, const std::vector<std::vector<Puff>>& tiers)
+{
+    float sum = 0.0f;
+    for (size_t tier = 0; tier < tiers.size(); ++tier)
+        sum += PuffSum(u, v, kPuffTiers[tier], tiers[tier]);
+    return std::log(sum) / kPuffJoinSharpness +
+           kFineShare * LayeredNoise(u, v, kFineCells, 4, kFineGain, 200);
 }
 
 float CellGradientDot(uint32_t x, uint32_t y, uint32_t seed, float dx, float dy)
@@ -343,6 +407,9 @@ std::vector<uint32_t> BuildCloudField(uint32_t size)
     std::vector<float> warpU(texels);
     std::vector<float> warpV(texels);
     const float texelSize = 1.0f / static_cast<float>(size);
+    std::vector<std::vector<Puff>> tiers;
+    for (const PuffTier& tier : kPuffTiers)
+        tiers.push_back(PuffsOf(tier));
     for (uint32_t y = 0; y < size; ++y)
         for (uint32_t x = 0; x < size; ++x)
         {
@@ -351,8 +418,8 @@ std::vector<uint32_t> BuildCloudField(uint32_t size)
             const size_t at = static_cast<size_t>(y) * size + x;
             warpU[at] = LayeredNoise(u, v, kWarpCells, 3, kCommonGain, 400);
             warpV[at] = LayeredNoise(u, v, kWarpCells, 3, kCommonGain, 500);
-            body[at] =
-                BodyAt(Wrapped(u + (warpU[at] - 0.5f) * kWarpReach), Wrapped(v + (warpV[at] - 0.5f) * kWarpReach));
+            body[at] = BodyAt(Wrapped(u + (warpU[at] - 0.5f) * kWarpReach),
+                              Wrapped(v + (warpV[at] - 0.5f) * kWarpReach), tiers);
             detail[at] = BillowsAt(u, v, kDetailCells, kBillowLayers, 600);
         }
     const std::vector<float> spreadBody = EvenlySpread(body);
